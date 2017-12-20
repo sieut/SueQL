@@ -22,7 +22,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
 
     match first_pass(&mut f_reader) {
         Ok(_) => {
-
+            // subsequent passes here
         },
         Err(error) => return Err(error)
     }
@@ -49,7 +49,7 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
             if current_buf_size % SIZE_OF_I32 != 0 { assert!(false, "Wrong buffer size"); }
 
             // cast the bytes into ints
-            let mut ints_buffer = bytes_to_ints(&buffer, bytes_read);
+            let mut ints_buffer = bytes_to_ints(&buffer, current_buf_size);
 
             ints_buffer.sort();
 
@@ -57,10 +57,10 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
             ints_to_bytes(&ints_buffer, &mut buffer);
 
             // write the page into temp file
-            match buffer_f_writer.write(&buffer) {
+            match buffer_f_writer.write(&buffer[0..current_buf_size]) {
                 Ok(bytes_written) => {
                     //TODO write is messed up, do something?
-                    if bytes_written != bytes_read { break; }
+                    if bytes_written != current_buf_size { break; }
                 }
                 //TODO write is messed up
                 Err(_) => break
@@ -80,7 +80,7 @@ fn bytes_to_ints(bytes_buffer: &[u8], size: usize) -> Vec<i32> {
     let mut ints_buffer = Vec::new();
     for i in 0..size/SIZE_OF_I32 {
         let mut slice_copy:[u8; SIZE_OF_I32] = [0,0,0,0];
-        slice_copy.clone_from_slice(&bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32 - 1]);
+        slice_copy.clone_from_slice(&bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32]);
         ints_buffer.push(unsafe { transmute::<[u8; SIZE_OF_I32], i32>(slice_copy) } );
     }
 
@@ -90,7 +90,7 @@ fn bytes_to_ints(bytes_buffer: &[u8], size: usize) -> Vec<i32> {
 fn ints_to_bytes(ints_buffer: &Vec<i32>, bytes_buffer: &mut [u8]) {
     for i in 0..ints_buffer.len() {
         let slice:[u8; SIZE_OF_I32] = unsafe { transmute::<i32, [u8; SIZE_OF_I32]>(ints_buffer[i]) };
-        &bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32 - 1].clone_from_slice(&slice);
+        &bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32].clone_from_slice(&slice);
     }
 }
 
