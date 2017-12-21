@@ -96,26 +96,44 @@ fn ints_to_bytes(ints_buffer: &Vec<i32>, bytes_buffer: &mut [u8]) {
 
 #[cfg(test)]
 mod tests {
+    extern crate rand;
+
     use std::io::BufReader;
     use std::io::Read;
     use std::fs::File;
     use sort;
 
     #[test]
-    fn test_1() {
-        // test_file content: 1, 4, 25, 19, 32, 11, 72, 80
-        let _test_file = String::from("sort_test");
-        sort::sort(_test_file);
+    fn test_conversions() {
+        let mut test_buffer:[u8; 512] = [0; 512];
+        // for i in 0..512 {
+        //     test_buffer[i] = rand::random::<u8>();
+        // }
+        for x in test_buffer.iter_mut() { *x = rand::random::<u8>(); }
 
-        let _first_pass = ".temp_sort_1";
-        match File::open(_first_pass) {
-            Ok(file) => {
-                let mut reader = BufReader::new(file);
-                let mut file_content:[u8; 32] = [0; 32];
-                reader.read_exact(&mut file_content);
-                assert!(true);
-            }
-            Err(_) => assert!(false, "failed to read .temp_sort_1 for first pass test")
-        }
+        let clone_buffer:[u8; 512] = test_buffer.clone();
+
+        let ints_array = sort::bytes_to_ints(&test_buffer, 512);
+        sort::ints_to_bytes(&ints_array, &mut test_buffer);
+
+        for i in 0..512 { assert_eq!(clone_buffer[i], test_buffer[i]); }
     }
+
+    // #[test]
+    // fn test_1() {
+    //     // test_file content: 1, 4, 25, 19, 32, 11, 72, 80
+    //     let _test_file = String::from("sort_test");
+    //     sort::sort(_test_file);
+
+    //     let _first_pass = ".temp_sort_1";
+    //     match File::open(_first_pass) {
+    //         Ok(file) => {
+    //             let mut reader = BufReader::new(file);
+    //             let mut file_content:[u8; 32] = [0; 32];
+    //             reader.read_exact(&mut file_content);
+    //             assert!(true);
+    //         }
+    //         Err(_) => assert!(false, "failed to read .temp_sort_1 for first pass test")
+    //     }
+    // }
 }
