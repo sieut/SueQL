@@ -57,11 +57,8 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
             ints_to_bytes(&ints_buffer, &mut buffer);
 
             // write the page into temp file
-            match buffer_f_writer.write(&buffer[0..current_buf_size]) {
-                Ok(bytes_written) => {
-                    //TODO write is messed up, do something?
-                    if bytes_written != current_buf_size { break; }
-                }
+            match buffer_f_writer.write_all(&buffer[0..current_buf_size]) {
+                Ok(_) => {}
                 //TODO write is messed up
                 Err(_) => break
             }
