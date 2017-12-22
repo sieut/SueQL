@@ -13,15 +13,8 @@ const _TEMP_FILE2:&str = ".temp_sort2";
 // External sort
 // v1: first pass quick sort
 pub fn sort(_file: String) -> Result<bool, String> {
-    let file: File;
-    match File::open(_file) {
-        Ok(opened_file) => file = opened_file,
-        Err(_) => return Err(String::from("Error reading file"))
-    }
-    let mut f_reader = BufReader::new(file);
-
-    match first_pass(&mut f_reader) {
-        Ok(_) => {
+    match first_pass(_file) {
+        Ok(mut runs) => {
             // subsequent passes here
         },
         Err(error) => return Err(error)
@@ -30,7 +23,14 @@ pub fn sort(_file: String) -> Result<bool, String> {
     Ok(true)
 }
 
-fn first_pass(f_reader: &mut BufReader<File>) -> Result<Vec<usize>, String> {
+fn first_pass(_file: String) -> Result<Vec<usize>, String> {
+    let file: File;
+    match File::open(_file) {
+        Ok(opened_file) => file = opened_file,
+        Err(_) => return Err(String::from("Error reading file"))
+    }
+    let mut f_reader = BufReader::new(file);
+
     let buffer_file: File;
     match File::create(_TEMP_FILE1) {
         Ok(file) => buffer_file = file,
@@ -133,6 +133,7 @@ mod tests {
             assert!(create_and_write_result.is_ok(), "Can't create test data file");
         }
 
+        // open the file so f_reader is not uninitialized
         let data_file: File;
         match File::open("test_data") {
             Ok(opened_file) => data_file = opened_file,
@@ -142,7 +143,7 @@ mod tests {
         let mut f_reader = BufReader::new(data_file);
         let mut chars_array:[u8; 2048] = [0; 2048];
 
-        let test_result = sort::first_pass(&mut f_reader)
+        let test_result = sort::first_pass(String::from("test_data"))
             .and_then(|_| {
                 match File::open(".temp_sort1") {
                     Ok(file) => {
