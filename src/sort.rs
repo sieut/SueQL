@@ -30,7 +30,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
     Ok(true)
 }
 
-fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
+fn first_pass(f_reader: &mut BufReader<File>) -> Result<Vec<usize>, String> {
     let buffer_file: File;
     match File::create(_TEMP_FILE1) {
         Ok(file) => buffer_file = file,
@@ -40,8 +40,12 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
 
     let mut buffer = [0; PAGE_SIZE];
     let mut current_buf_size = 0;
+    let mut total_read = 0;
+    let mut ret = vec![0];
+
     while let Ok(bytes_read) = f_reader.read(&mut buffer[current_buf_size..PAGE_SIZE]) {
         current_buf_size += bytes_read;
+        total_read += bytes_read;
 
         // If we currently have a full page or the last page of file
         if current_buf_size == PAGE_SIZE || (bytes_read == 0 && current_buf_size > 0) {
@@ -58,7 +62,7 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
 
             // write the page into temp file
             match buffer_f_writer.write_all(&buffer[0..current_buf_size]) {
-                Ok(_) => {}
+                Ok(_) => ret.push(total_read),
                 //TODO write is messed up
                 Err(_) => break
             }
@@ -70,7 +74,7 @@ fn first_pass(f_reader: &mut BufReader<File>) -> Result<bool, String> {
         if current_buf_size == PAGE_SIZE { current_buf_size = 0; }
     };
 
-    Ok(true)
+    Ok(ret)
 }
 
 fn bytes_to_ints(bytes_buffer: &[u8], size: usize) -> Vec<i32> {
