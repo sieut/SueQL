@@ -118,8 +118,6 @@ mod tests {
     use std::io::BufReader;
     use std::io::Read;
     use std::io::Write;
-    use std::io::Seek;
-    use std::io::SeekFrom;
     use std::fs::File;
     use sort;
 
