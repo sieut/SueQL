@@ -77,6 +77,22 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
     Ok(ret)
 }
 
+/// Read a page of memory from the given reader
+/// Returns number of bytes read
+fn read_page(reader: &mut BufReader<File>, buffer: &mut [u8; PAGE_SIZE]) -> usize {
+    let mut current_buf_size = 0;
+
+    while let Ok(bytes_read) = reader.read(&mut buffer[current_buf_size..PAGE_SIZE]) {
+        current_buf_size += bytes_read;
+        // If we have a full page or the last page of file
+        if current_buf_size == PAGE_SIZE || bytes_read == 0 {
+            break;
+        }
+    };
+
+    current_buf_size
+}
+
 fn bytes_to_ints(bytes_buffer: &[u8], size: usize) -> Vec<i32> {
     let mut ints_buffer = Vec::new();
     for i in 0..size/SIZE_OF_I32 {
