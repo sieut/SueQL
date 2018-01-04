@@ -2,21 +2,38 @@ use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
 use std::io::Write;
+use std::io::Seek;
+use std::io::SeekFrom;
 use std::fs::File;
+use std::fs::remove_file;
 use std::mem::transmute;
 
 const PAGE_SIZE:usize = 4096;
 const SIZE_OF_I32:usize = 4;
-const _TEMP_FILE1:&str = ".temp_sort1";
-const _TEMP_FILE2:&str = ".temp_sort2";
+const _TEMP_FILE1:&str = ".temp_sort_1";
+const FILE_PREFIX:&str = ".temp_sort_";
 
 // External sort
 // v1: first pass quick sort
 pub fn sort(_file: String) -> Result<bool, String> {
     match first_pass(_file) {
         Ok(mut runs) => {
-            // subsequent passes here
-        },
+            // Subsequent passes
+            let mut pass:u32 = 2;
+            loop {
+                let merge_result = merge(&runs, pass)
+                    .and_then(|new_runs| {
+                        runs = new_runs;
+                        Ok(true)
+                    });
+                // First run should always be at beginning of file
+                assert_eq!(runs[0], 0);
+
+                if !merge_result.is_ok() { return Err(merge_result.unwrap_err()); }
+                if runs.len() == 1 { break; }
+                pass += 1;
+            }
+        }
         Err(error) => return Err(error)
     }
 
@@ -77,6 +94,71 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
     Ok(ret)
 }
 
+fn merge(runs: &Vec<usize>, pass: u32) -> Result<Vec<usize>, String> {
+    let last_pass_fname:String = String::from(FILE_PREFIX) + &(pass-1).to_string();
+    let cur_pass_fname:String = String::from(FILE_PREFIX) + &(pass).to_string();
+
+    // Open last pass' file
+    let lpass_file:File;
+    match File::open(last_pass_fname.clone()) {
+        Ok(file) => lpass_file = file,
+        Err(_) => return Err(String::from("Can't open last pass' file"))
+    }
+    // Create new file for this pass
+    let cpass_file:File;
+    match File::create(cur_pass_fname) {
+        Ok(file) => cpass_file = file,
+        Err(_) => return Err(String::from("Can't create current pass' file"))
+    }
+
+    let mut ret = Vec::new();
+
+    for mut i in 0..runs.len() {
+
+        // Hack to step i by 2, step_by is not stable yet
+        i += 1;
+    }
+
+    remove_file(last_pass_fname);
+
+    Ok(ret)
+}
+
+/// Merge 2 given runs of input file 'file' and write to output file with 'writer'
+/// 'run_1_size' is offset_2 - offset_1, 'run_2_size' is 0 if run_2 goes to EOF
+fn merge_runs(file: &File, writer: &mut BufWriter<File>, r1: &Run, r2: &Run) {
+    // Create readers and move them to runs' offsets
+    let mut reader_1 = BufReader::new(file);
+    reader_1.seek(SeekFrom::Start(r1.offset as u64));
+    let mut reader_2 = BufReader::new(file);
+    reader_2.seek(SeekFrom::Start(r2.offset as u64));
+
+    // Buffers and total bytes read for each run
+    let mut r1_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
+    let mut r1_bytes_read = 0;
+    let mut r2_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
+    let mut r2_bytes_read = 0;
+
+    // Merged buffer
+    let mut m_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
+    let mut m_size = 0;
+
+    loop {
+        if r1_bytes_read >= r1.size && r2_bytes_read >= r2.size { break; }
+
+        let r1_cur_size;
+        let r2_cur_size;
+        if r1_bytes_read < r1.size { r1_cur_size = read_page(&mut reader_1, &mut r1_buffer); }
+        if r2_bytes_read < r2.size { r2_cur_size = read_page(&mut reader_2, &mut r2_buffer); }
+
+        r1_bytes_read += r1_cur_size;
+        r2_bytes_read += r2_cur_size;
+
+        let r1_vec = bytes_to_ints(r1_buffer, r1_cur_size);
+        let r2_vec = bytes_to_ints(r2_buffer, r2_cur_size);
+    }
+}
+
 /// Read a page of memory from the given reader
 /// Returns number of bytes read
 fn read_page(reader: &mut BufReader<&File>, buffer: &mut [u8; PAGE_SIZE]) -> usize {
@@ -111,6 +193,11 @@ fn ints_to_bytes(ints_buffer: &Vec<i32>, bytes_buffer: &mut [u8]) {
         let slice:[u8; SIZE_OF_I32] = unsafe { transmute::<i32, [u8; SIZE_OF_I32]>(ints_buffer[i]) };
         &bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32].clone_from_slice(&slice);
     }
+}
+
+struct Run {
+    offset: usize,
+    size: usize
 }
 
 #[cfg(test)]
