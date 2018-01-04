@@ -13,6 +13,11 @@ const SIZE_OF_I32:usize = 4;
 const _TEMP_FILE1:&str = ".temp_sort_1";
 const FILE_PREFIX:&str = ".temp_sort_";
 
+struct Run {
+    offset: usize,
+    size: usize
+}
+
 // External sort
 // v1: first pass quick sort
 pub fn sort(_file: String) -> Result<bool, String> {
@@ -193,11 +198,6 @@ fn ints_to_bytes(ints_buffer: &Vec<i32>, bytes_buffer: &mut [u8]) {
         let slice:[u8; SIZE_OF_I32] = unsafe { transmute::<i32, [u8; SIZE_OF_I32]>(ints_buffer[i]) };
         &bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32].clone_from_slice(&slice);
     }
-}
-
-struct Run {
-    offset: usize,
-    size: usize
 }
 
 #[cfg(test)]
