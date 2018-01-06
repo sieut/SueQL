@@ -8,4 +8,5 @@ mod tests {
 
 pub mod database;
 pub mod table;
-pub mod sort;
+mod sort;
+mod types;
