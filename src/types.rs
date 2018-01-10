@@ -11,10 +11,12 @@ pub trait Type {
     fn compare(&self, rhs: Self::SType) -> Ordering;
 }
 
+#[derive(Copy, Clone)]
 pub enum ColumnType {
     Int(Integer),
 }
 
+#[derive(Copy, Clone)]
 pub struct Integer(i32);
 
 impl Type for Integer {
