@@ -29,10 +29,10 @@ impl Type for Integer {
         }
         else {
             let mut int_value:i32 = 0;
-            int_value |= ((bytes[0] as i32) << 24);
-            int_value |= ((bytes[1] as i32) << 16);
-            int_value |= ((bytes[2] as i32) << 8);
-            int_value |= (bytes[3] as i32);
+            int_value |= (bytes[0] as i32) << 24;
+            int_value |= (bytes[1] as i32) << 16;
+            int_value |= (bytes[2] as i32) << 8;
+            int_value |= bytes[3] as i32;
             Some(Integer(int_value))
         }
     }
