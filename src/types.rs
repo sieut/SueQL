@@ -1,5 +1,7 @@
 use std::cmp::Ordering;
 
+// TODO have a const SIZE in trait Type, so Integer doesn't have to shift bits like crazy and can
+// use transmute. Also look at crate arrayref https://docs.rs/arrayref/0.3.4/arrayref/
 pub trait Type {
     type SType;
     type CType;
