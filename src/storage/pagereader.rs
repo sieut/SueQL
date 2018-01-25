@@ -22,4 +22,19 @@ impl PageReader {
             Err(_) => None
         }
     }
+
+    fn consume_page(&mut self) -> Vec<u8> {
+        let mut buffer = [0; PAGE_SIZE];
+        let mut bytes_read = 0;
+
+        while let Ok(b) = self.file.read(&mut buffer[bytes_read..PAGE_SIZE]) {
+            bytes_read += b;
+            if bytes_read == PAGE_SIZE || b == 0 {
+                self.page_offset += 1;
+                break;
+            }
+        }
+
+        buffer.to_vec()
+    }
 }
