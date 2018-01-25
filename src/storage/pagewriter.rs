@@ -9,7 +9,7 @@ pub struct PageWriter {
 }
 
 impl PageWriter {
-    fn new(file_name: String, page_offset: usize, new_file: bool) -> Option<PageWriter> {
+    pub fn new(file_name: String, page_offset: usize, new_file: bool) -> Option<PageWriter> {
         // TODO code repetition
         if new_file {
             assert!(page_offset == 0);
@@ -36,7 +36,7 @@ impl PageWriter {
         }
     }
 
-    fn store(&mut self, page: Vec<u8>) -> Result<()> {
+    pub fn store(&mut self, page: &Vec<u8>) -> Result<()> {
         self.file.write_all(page.as_slice())
     }
 }
