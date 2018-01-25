@@ -6,12 +6,12 @@ pub trait Type {
     type CType;
     const SIZE:usize;
 
-    fn from_bytes(bytes: &Vec<u8>) -> Option<Self::SType>;
+    fn from_bytes(bytes: &[u8]) -> Option<Self::SType>;
     fn to_bytes(&self) -> Option<Vec<u8>>;
     fn get_value(&self) -> Self::CType;
     fn get_size() -> usize { Self::SIZE }
 
-    fn compare(&self, rhs: Self::SType) -> Ordering;
+    fn compare(&self, rhs: &Self::SType) -> Ordering;
 }
 
 #[derive(Copy, Clone)]
@@ -27,7 +27,7 @@ impl Type for Integer {
     type CType = i32;
     const SIZE:usize = 4;
 
-    fn from_bytes(bytes: &Vec<u8>) -> Option<Self::SType> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self::SType> {
         if bytes.len() != Self::SIZE {
             None
         }
@@ -46,7 +46,7 @@ impl Type for Integer {
         self.0
     }
 
-    fn compare(&self, rhs: Self::SType) -> Ordering {
+    fn compare(&self, rhs: &Self::SType) -> Ordering {
         self.0.cmp(&rhs.get_value())
     }
 }
