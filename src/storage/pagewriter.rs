@@ -1,6 +1,6 @@
 use storage::PAGE_SIZE;
 use std::fs::File;
-use std::io::{Seek, SeekFrom};
+use std::io::{Write, Seek, SeekFrom, Result};
 
 pub struct PageWriter {
     file_name: String,
@@ -34,5 +34,9 @@ impl PageWriter {
                 Err(_) => None
             }
         }
+    }
+
+    fn store(&mut self, page: Vec<u8>) -> Result<()> {
+        self.file.write_all(page.as_slice())
     }
 }
