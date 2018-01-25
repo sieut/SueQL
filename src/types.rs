@@ -1,14 +1,14 @@
 use std::cmp::Ordering;
+use std::mem::transmute;
 
-// TODO have a const SIZE in trait Type, so Integer doesn't have to shift bits like crazy and can
-// use transmute. Also look at crate arrayref https://docs.rs/arrayref/0.3.4/arrayref/
 pub trait Type {
     type SType;
     type CType;
+    const SIZE:usize;
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::SType>;
+    fn from_bytes(bytes: &Vec<u8>) -> Option<Self::SType>;
     fn get_value(&self) -> Self::CType;
-    fn get_size(&self) -> usize;
+    fn get_size(&self) -> usize { Self::SIZE }
 
     fn compare(&self, rhs: Self::SType) -> Ordering;
 }
@@ -24,17 +24,14 @@ pub struct Integer(i32);
 impl Type for Integer {
     type SType = Integer;
     type CType = i32;
+    const SIZE:usize = 4;
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::SType> {
-        if bytes.len() != 4 {
+    fn from_bytes(bytes: &Vec<u8>) -> Option<Self::SType> {
+        if bytes.len() != Self::SIZE {
             None
         }
         else {
-            let mut int_value:i32 = 0;
-            int_value |= (bytes[0] as i32) << 24;
-            int_value |= (bytes[1] as i32) << 16;
-            int_value |= (bytes[2] as i32) << 8;
-            int_value |= bytes[3] as i32;
+            let int_value:i32 = unsafe { transmute::<[u8; Self::SIZE], i32>([bytes[0], bytes[1], bytes[2], bytes[3]]) };
             Some(Integer(int_value))
         }
     }
@@ -42,8 +39,6 @@ impl Type for Integer {
     fn get_value(&self) -> Self::CType {
         self.0
     }
-
-    fn get_size(&self) -> usize { 4 }
 
     fn compare(&self, rhs: Self::SType) -> Ordering {
         self.0.cmp(&rhs.get_value())
