@@ -7,8 +7,9 @@ pub trait Type {
     const SIZE:usize;
 
     fn from_bytes(bytes: &Vec<u8>) -> Option<Self::SType>;
+    fn to_bytes(&self) -> Option<Vec<u8>>;
     fn get_value(&self) -> Self::CType;
-    fn get_size(&self) -> usize { Self::SIZE }
+    fn get_size() -> usize { Self::SIZE }
 
     fn compare(&self, rhs: Self::SType) -> Ordering;
 }
@@ -34,6 +35,11 @@ impl Type for Integer {
             let int_value:i32 = unsafe { transmute::<[u8; Self::SIZE], i32>([bytes[0], bytes[1], bytes[2], bytes[3]]) };
             Some(Integer(int_value))
         }
+    }
+
+    fn to_bytes(&self) -> Option<Vec<u8>> {
+        let bytes_arr = unsafe { transmute::<i32, [u8; Self::SIZE]>(self.0) };
+        Some(bytes_arr.to_vec())
     }
 
     fn get_value(&self) -> Self::CType {
