@@ -1,3 +1,7 @@
+use types;
+use types::Type;
+use storage::{pagereader,pagewriter};
+
 use std::io::BufReader;
 use std::io::BufWriter;
 use std::io::Read;
@@ -46,55 +50,41 @@ pub fn sort(_file: String) -> Result<bool, String> {
 }
 
 fn first_pass(_file: String) -> Result<Vec<usize>, String> {
-    let file: File;
-    match File::open(_file) {
-        Ok(opened_file) => file = opened_file,
-        Err(_) => return Err(String::from("Error reading file"))
-    }
-    let mut f_reader = BufReader::new(file);
+    let mut f_reader = pagereader::PageReader::new(_file, 0).unwrap();
+    let mut buffer_writer = pagewriter::PageWriter::new(String::from(_TEMP_FILE1), 0, true).unwrap();
 
-    let buffer_file: File;
-    match File::create(_TEMP_FILE1) {
-        Ok(file) => buffer_file = file,
-        Err(_) => return Err(String::from("Error creating buffer file"))
-    }
-    let mut buffer_f_writer = BufWriter::new(buffer_file);
-
-    let mut buffer = [0; PAGE_SIZE];
-    let mut current_buf_size = 0;
     let mut total_read = 0;
     let mut ret = vec![0];
 
-    while let Ok(bytes_read) = f_reader.read(&mut buffer[current_buf_size..PAGE_SIZE]) {
-        current_buf_size += bytes_read;
-        total_read += bytes_read;
+    loop {
+        let mut buffer:Vec<types::Integer> = vec![];
 
-        // If we currently have a full page or the last page of file
-        if current_buf_size == PAGE_SIZE || (bytes_read == 0 && current_buf_size > 0) {
+        {
+            let byte_buffer = f_reader.consume_page();
+            total_read += byte_buffer.len();
+
             // TODO file is messed up?
-            if current_buf_size % SIZE_OF_I32 != 0 { assert!(false, "Wrong buffer size"); }
+            if byte_buffer.len() % types::Integer::get_size() != 0 { assert!(false, "Wrong byte_buffer size"); }
+            if byte_buffer.len() == 0 { break; }
 
-            // cast the bytes into ints
-            let mut ints_buffer = bytes_to_ints(&buffer, current_buf_size);
-
-            ints_buffer.sort();
-
-            // cast the sort ints back to bytes
-            ints_to_bytes(&ints_buffer, &mut buffer);
-
-            // write the page into temp file
-            match buffer_f_writer.write_all(&buffer[0..current_buf_size]) {
-                Ok(_) => ret.push(total_read),
-                //TODO write is messed up
-                Err(_) => break
+            for i in 0..byte_buffer.len()/types::Integer::get_size() {
+                let new_val = types::Integer::from_bytes(&byte_buffer[i * types::Integer::get_size()..(i+1) * types::Integer::get_size()]).unwrap();
+                buffer.push(new_val);
             }
         }
 
-        // bytes_read = 0 when at EOF, so break
-        if bytes_read == 0 { break; }
-        // reset buffer for a new page when we've read a full page
-        if current_buf_size == PAGE_SIZE { current_buf_size = 0; }
-    };
+        buffer.sort_by(|a, b| a.compare(b));
+
+        {
+            let mut output_buffer:Vec<u8> = vec![];
+            for int in buffer.iter() {
+                output_buffer.append(&mut int.to_bytes().unwrap());
+            }
+
+            buffer_writer.store(&output_buffer);
+            ret.push(total_read);
+        }
+    }
 
     Ok(ret)
 }
