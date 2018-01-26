@@ -69,12 +69,18 @@ where T: Type {
 
 impl<'a, T> IterMut<'a, T>
 where T: Type {
+    /// Update buf_page's underlying data buffer at self.index - 1
+    /// The reason is that an item should be consumed and processed, before getting updated
     pub fn update(&mut self, new_value: &T) {
+        // An item should be consumed before getting updated
+        assert!(self.index != 0);
+
         let new_bytes = new_value.to_bytes().unwrap();
         assert_eq!(new_bytes.len(), T::SIZE);
 
         for i in 0..new_bytes.len() {
-            self.buf_page.data[self.index * T::SIZE + i] = new_bytes[i];
+            let buf_page_index = (self.index - 1) * T::SIZE + i;
+            self.buf_page.data[buf_page_index] = new_bytes[i];
         }
     }
 }
