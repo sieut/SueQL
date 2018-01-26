@@ -1,41 +1,23 @@
-use std::collections::HashSet;
-use std::hash::{Hash, Hasher};
-use std::cmp::Eq;
-use std::sync::Mutex;
 use storage::PAGE_SIZE;
+use types::Type;
+use std::iter::Iterator;
+use std::marker::PhantomData;
 
-lazy_static! {
-    static ref ALLOCATED_PAGES: Mutex<HashSet<BufPageId>> = Mutex::new(HashSet::new());
+pub struct BufPage<T>
+where T: Type {
+    data: Vec<u8>,
+    index: usize,
+    data_type: PhantomData<T>
 }
 
-pub struct BufPage {
-    id: BufPageId,
-    data: [u8; PAGE_SIZE]
-}
+impl<T> Iterator for BufPage<T>
+where T: Type {
+    type Item = T::SType;
 
-#[derive(PartialEq)]
-pub struct BufPageId {
-    file_name: String,
-    offset: usize
-}
+    fn next(&mut self) -> Option<Self::Item> {
+        let item:Self::Item = T::from_bytes(&self.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
+        self.index += 1;
 
-impl BufPage {
-    fn new(file_name: String, offset: usize) -> BufPage {
-        // TODO check if bufpage is already allocated
-        ALLOCATED_PAGES.lock().unwrap().insert(BufPageId { file_name: file_name.clone(), offset: offset });
-
-        BufPage {
-            id: BufPageId { file_name: file_name.clone(), offset: offset },
-            data: [0; PAGE_SIZE]
-        }
+        Some(item)
     }
 }
-
-impl Hash for BufPageId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.file_name.hash(state);
-        self.offset.hash(state);
-    }
-}
-
-impl Eq for BufPageId { }
