@@ -42,7 +42,7 @@ where T: Type {
     type Item = T::SType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.buf_page.data.len() / T::Size {
+        if self.index == self.buf_page.data.len() / T::SIZE {
             None
         }
         else {
