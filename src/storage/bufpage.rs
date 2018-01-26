@@ -6,7 +6,6 @@ use std::marker::PhantomData;
 pub struct BufPage<T>
 where T: Type {
     data: Vec<u8>,
-    index: usize,
     data_type: PhantomData<T>
 }
 
@@ -16,7 +15,6 @@ where T: Type {
         assert_eq!(data_size % T::SIZE, 0);
         BufPage::<T> {
             data: data_buffer[0..data_size].to_vec(),
-            index: 0,
             data_type: PhantomData
         }
     }
