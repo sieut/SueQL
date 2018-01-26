@@ -37,6 +37,7 @@ impl PageWriter {
         }
     }
 
+    // Type T doesn't really matter here, it's just required
     pub fn store<T>(&mut self, page: &bufpage::BufPage<T>) -> Result<()>
     where T: Type {
         self.file.write_all(page.data().as_slice())
