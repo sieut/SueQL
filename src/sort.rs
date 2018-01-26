@@ -73,7 +73,7 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
             }
         }
 
-        buffer.sort_by(|a, b| a.compare(b));
+        buffer.sort();
 
         {
             let mut output_buffer:Vec<u8> = vec![];
@@ -139,18 +139,18 @@ fn merge_runs(file: &File, writer: &mut BufWriter<File>, r1: &Run, r2: &Run) {
     let mut m_size = 0;
 
     loop {
-        if r1_bytes_read >= r1.size && r2_bytes_read >= r2.size { break; }
+        // if r1_bytes_read >= r1.size && r2_bytes_read >= r2.size { break; }
 
-        let r1_cur_size;
-        let r2_cur_size;
-        if r1_bytes_read < r1.size { r1_cur_size = read_page(&mut reader_1, &mut r1_buffer); }
-        if r2_bytes_read < r2.size { r2_cur_size = read_page(&mut reader_2, &mut r2_buffer); }
+        // let mut r1_cur_size = 0;
+        // let mut r2_cur_size = 0;
+        // if r1_bytes_read < r1.size { r1_cur_size = read_page(&mut reader_1, &mut r1_buffer); }
+        // if r2_bytes_read < r2.size { r2_cur_size = read_page(&mut reader_2, &mut r2_buffer); }
 
-        r1_bytes_read += r1_cur_size;
-        r2_bytes_read += r2_cur_size;
+        // r1_bytes_read += r1_cur_size;
+        // r2_bytes_read += r2_cur_size;
 
-        let r1_vec = bytes_to_ints(r1_buffer, r1_cur_size);
-        let r2_vec = bytes_to_ints(r2_buffer, r2_cur_size);
+        // let r1_vec = bytes_to_ints(&r1_buffer, r1_cur_size);
+        // let r2_vec = bytes_to_ints(&r2_buffer, r2_cur_size);
     }
 }
 

@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::{Eq,Ordering};
 use std::mem::transmute;
 
 pub trait Type {
@@ -10,8 +10,6 @@ pub trait Type {
     fn to_bytes(&self) -> Option<Vec<u8>>;
     fn get_value(&self) -> Self::CType;
     fn get_size() -> usize { Self::SIZE }
-
-    fn compare(&self, rhs: &Self::SType) -> Ordering;
 }
 
 #[derive(Copy, Clone)]
@@ -19,7 +17,7 @@ pub enum ColumnType {
     Int(Integer),
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct Integer(i32);
 
 impl Type for Integer {
@@ -45,8 +43,12 @@ impl Type for Integer {
     fn get_value(&self) -> Self::CType {
         self.0
     }
+}
 
-    fn compare(&self, rhs: &Self::SType) -> Ordering {
-        self.0.cmp(&rhs.get_value())
+impl Eq for Integer {}
+
+impl Ord for Integer {
+    fn cmp(&self, other: &Integer) -> Ordering {
+        self.0.cmp(&other.0)
     }
 }
