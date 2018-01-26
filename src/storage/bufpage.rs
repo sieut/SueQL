@@ -21,6 +21,8 @@ where T: Type {
             data_type: PhantomData
         }
     }
+
+    pub fn data(&self) -> &Vec<u8> { &self.data }
 }
 
 impl<T> Iterator for BufPage<T>
