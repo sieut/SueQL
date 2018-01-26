@@ -6,8 +6,21 @@ use std::marker::PhantomData;
 pub struct BufPage<T>
 where T: Type {
     data: Vec<u8>,
+    size: usize,
     index: usize,
     data_type: PhantomData<T>
+}
+
+impl<T> BufPage<T>
+where T: Type {
+    pub fn new(data_buffer: &[u8; PAGE_SIZE], data_size: usize) -> BufPage<T> {
+        BufPage::<T> {
+            data: data_buffer.to_vec(),
+            size: data_size,
+            index: 0,
+            data_type: PhantomData
+        }
+    }
 }
 
 impl<T> Iterator for BufPage<T>
