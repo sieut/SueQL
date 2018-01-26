@@ -42,10 +42,15 @@ where T: Type {
     type Item = T::SType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
-        self.index += 1;
+        if self.index == self.buf_page.data.len() / T::Size {
+            None
+        }
+        else {
+            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
+            self.index += 1;
 
-        Some(item)
+            Some(item)
+        }
     }
 
     fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
