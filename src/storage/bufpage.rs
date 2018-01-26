@@ -29,6 +29,13 @@ where T: Type {
             index: 0
         }
     }
+
+    pub fn iter_mut(&mut self) -> IterMut<T> {
+        IterMut {
+            buf_page: self,
+            index: 0
+        }
+    }
 }
 
 pub struct Iter<'a, T: 'a>
@@ -38,6 +45,43 @@ where T: Type {
 }
 
 impl<'a, T> Iterator for Iter<'a, T>
+where T: Type {
+    type Item = T::SType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.buf_page.data.len() / T::SIZE {
+            None
+        }
+        else {
+            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
+            self.index += 1;
+
+            Some(item)
+        }
+    }
+
+    fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
+}
+
+pub struct IterMut<'a, T: 'a>
+where T: Type {
+    buf_page: &'a mut BufPage<T>,
+    index: usize,
+}
+
+impl<'a, T> IterMut<'a, T>
+where T: Type {
+    pub fn update(&mut self, new_value: &T) {
+        let new_bytes = new_value.to_bytes().unwrap();
+        assert_eq!(new_bytes.len(), T::SIZE);
+
+        for i in 0..new_bytes.len() {
+            self.buf_page.data[self.index * T::SIZE + i] = new_bytes[i];
+        }
+    }
+}
+
+impl<'a, T> Iterator for IterMut<'a, T>
 where T: Type {
     type Item = T::SType;
 
