@@ -20,6 +20,10 @@ pub enum ColumnType {
 #[derive(Copy, Clone, PartialEq, PartialOrd)]
 pub struct Integer(i32);
 
+impl Integer {
+    pub fn new(value: i32) -> Integer { Integer(value) }
+}
+
 impl Type for Integer {
     type SType = Integer;
     type CType = i32;
