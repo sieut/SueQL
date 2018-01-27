@@ -1,5 +1,5 @@
 use types::Type;
-use storage::{PAGE_SIZE,bufpage};
+use storage::{PAGE_SIZE, BufPage};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 
@@ -24,7 +24,7 @@ impl PageReader {
         }
     }
 
-    pub fn consume_page<T>(&mut self) -> bufpage::BufPage<T>
+    pub fn consume_page<T>(&mut self) -> BufPage<T>
     where T: Type {
         let mut buffer = [0; PAGE_SIZE];
         let mut bytes_read = 0;
@@ -37,6 +37,6 @@ impl PageReader {
             }
         }
 
-        bufpage::BufPage::<T>::new(&buffer, bytes_read)
+        BufPage::<T>::new(&buffer, bytes_read)
     }
 }

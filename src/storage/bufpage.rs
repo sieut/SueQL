@@ -29,7 +29,8 @@ where T: Type {
     }
 
     pub fn data(&self) -> &Vec<u8> { &self.data }
-    pub fn size(&self) -> usize { self.data.len() }
+    pub fn len(&self) -> usize { self.data.len() }
+    pub fn is_full(&self) -> bool { self.data.len() == PAGE_SIZE }
 
     pub fn iter(&self) -> Iter<T> {
         Iter {
