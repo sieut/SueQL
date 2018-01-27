@@ -19,7 +19,17 @@ where T: Type {
         }
     }
 
+    pub fn push(&mut self, value: &T) {
+        assert!(self.data.len() < PAGE_SIZE);
+        self.data.append(&mut value.to_bytes().unwrap());
+    }
+
+    pub fn clear(&mut self) {
+        self.data.clear();
+    }
+
     pub fn data(&self) -> &Vec<u8> { &self.data }
+    pub fn size(&self) -> usize { self.data.len() }
 
     pub fn iter(&self) -> Iter<T> {
         Iter {
@@ -90,7 +100,7 @@ where T: Type {
     type Item = T::SType;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.buf_page.data.len() / T::SIZE {
+        if self.index >= self.buf_page.data.len() / T::SIZE {
             None
         }
         else {
