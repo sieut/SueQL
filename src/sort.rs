@@ -154,42 +154,6 @@ fn merge_runs(file: &File, writer: &mut BufWriter<File>, r1: &Run, r2: &Run) {
     }
 }
 
-/// Read a page of memory from the given reader
-/// Returns number of bytes read
-fn read_page(reader: &mut BufReader<&File>, buffer: &mut [u8; PAGE_SIZE]) -> usize {
-    let mut current_buf_size = 0;
-
-    while let Ok(bytes_read) = reader.read(&mut buffer[current_buf_size..PAGE_SIZE]) {
-        current_buf_size += bytes_read;
-        // If we have a full page or the last page of file
-        if current_buf_size == PAGE_SIZE || bytes_read == 0 {
-            break;
-        }
-    };
-
-    current_buf_size
-}
-
-// NOTE: this is essentially copying the buffer -> doubling memory cost
-// should probably write an iterator over the byte buffer
-fn bytes_to_ints(bytes_buffer: &[u8], size: usize) -> Vec<i32> {
-    let mut ints_buffer = Vec::new();
-    for i in 0..size/SIZE_OF_I32 {
-        let mut slice_copy:[u8; SIZE_OF_I32] = [0,0,0,0];
-        slice_copy.clone_from_slice(&bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32]);
-        ints_buffer.push(unsafe { transmute::<[u8; SIZE_OF_I32], i32>(slice_copy) } );
-    }
-
-    ints_buffer
-}
-
-fn ints_to_bytes(ints_buffer: &Vec<i32>, bytes_buffer: &mut [u8]) {
-    for i in 0..ints_buffer.len() {
-        let slice:[u8; SIZE_OF_I32] = unsafe { transmute::<i32, [u8; SIZE_OF_I32]>(ints_buffer[i]) };
-        &bytes_buffer[i * SIZE_OF_I32..(i + 1) * SIZE_OF_I32].clone_from_slice(&slice);
-    }
-}
-
 #[cfg(test)]
 mod tests {
     extern crate rand;
