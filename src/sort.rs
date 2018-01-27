@@ -3,15 +3,14 @@ use types::Type;
 use storage::{PAGE_SIZE, BufPage, PageReader, PageWriter};
 
 use std::collections::BinaryHeap;
-use std::io::{BufReader, BufWriter, Read, Write, Seek, SeekFrom};
+use std::io::{BufReader, BufWriter, Seek, SeekFrom};
 use std::fs::{File, remove_file};
-use std::mem::transmute;
 
 const FILE_PREFIX:&str = ".temp_sort_";
 
 struct Run {
     offset: usize,
-    size: usize
+    len: usize
 }
 
 // External sort
@@ -27,7 +26,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
                         Ok(true)
                     });
                 // First run should always be at beginning of file
-                assert_eq!(runs[0], 0);
+                assert_eq!(runs[0].offset, 0);
 
                 if !merge_result.is_ok() { return Err(merge_result.unwrap_err()); }
                 if runs.len() == 1 { break; }
@@ -41,11 +40,11 @@ pub fn sort(_file: String) -> Result<bool, String> {
 }
 
 /// Replacement sort basically
-fn first_pass(_file: String) -> Result<Vec<usize>, String> {
+fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut f_reader = PageReader::new(_file, 0).unwrap();
     let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0, true).unwrap();
 
-    let mut for_next_run: Vec<BufPage::<types::Integer>> = vec![BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
+    let mut for_next_run: Vec<BufPage<types::Integer>> = vec![BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
     let mut output_buf = BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
     let mut heap: BinaryHeap<types::Integer> = BinaryHeap::<types::Integer>::new();
 
@@ -53,7 +52,7 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
     let mut run_len: usize = 0;
 
     let mut total_read = 0;
-    let mut ret = vec![0];
+    let mut ret = vec![Run { offset: 0, len: 0 }];
 
     loop {
         let mut input_buf: BufPage<types::Integer> = f_reader.consume_page::<types::Integer>();
@@ -80,7 +79,8 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
 
         // If heap is empty, the current run has ended
         if heap.is_empty() {
-            ret.push(run_len);
+            ret.last_mut().unwrap().len = run_len;
+            ret.push(Run { offset: total_read, len: 0 });
 
             for buf in for_next_run.iter() {
                 for val in buf.iter() {
@@ -106,14 +106,14 @@ fn first_pass(_file: String) -> Result<Vec<usize>, String> {
     }
 
     if output_buf.len() > 0 {
-        ret.push(run_len);
+        ret.last_mut().unwrap().len = run_len;
         buffer_writer.store(&output_buf);
     }
 
     Ok(ret)
 }
 
-fn merge(runs: &Vec<usize>, pass: u32) -> Result<Vec<usize>, String> {
+fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
     let last_pass_fname:String = String::from(FILE_PREFIX) + &(pass-1).to_string();
     let cur_pass_fname:String = String::from(FILE_PREFIX) + &(pass).to_string();
 
