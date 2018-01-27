@@ -1,5 +1,5 @@
 [package]
-name = "db"
+name = "sueql"
 version = "0.1.0"
 authors = ["sieut"]
 
