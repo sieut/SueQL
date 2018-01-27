@@ -7,8 +7,6 @@ use std::io::{BufReader, BufWriter, Read, Write, Seek, SeekFrom};
 use std::fs::{File, remove_file};
 use std::mem::transmute;
 
-const SIZE_OF_I32:usize = 4;
-const _TEMP_FILE1:&str = ".temp_sort_1";
 const FILE_PREFIX:&str = ".temp_sort_";
 
 struct Run {
@@ -17,7 +15,6 @@ struct Run {
 }
 
 // External sort
-// v1: first pass quick sort
 pub fn sort(_file: String) -> Result<bool, String> {
     match first_pass(_file) {
         Ok(mut runs) => {
@@ -46,7 +43,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
 /// Replacement sort basically
 fn first_pass(_file: String) -> Result<Vec<usize>, String> {
     let mut f_reader = PageReader::new(_file, 0).unwrap();
-    let mut buffer_writer = PageWriter::new(String::from(_TEMP_FILE1), 0, true).unwrap();
+    let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0, true).unwrap();
 
     let mut for_next_run: Vec<BufPage::<types::Integer>> = vec![BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
     let mut output_buf = BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
