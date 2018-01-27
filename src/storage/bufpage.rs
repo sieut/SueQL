@@ -32,13 +32,15 @@ where T: Type {
     pub fn len(&self) -> usize { self.data.len() }
     pub fn is_full(&self) -> bool { self.data.len() == PAGE_SIZE }
 
+    // TODO is passing self to Iter, instead of &self right?
     pub fn iter(&self) -> Iter<T> {
         Iter {
-            buf_page: &self,
+            buf_page: self,
             index: 0
         }
     }
 
+    // TODO is passing self to Iter, instead of &self right?
     pub fn iter_mut(&mut self) -> IterMut<T> {
         IterMut {
             buf_page: self,
