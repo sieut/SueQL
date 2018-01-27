@@ -1,18 +1,12 @@
 use types;
 use types::Type;
-use storage::{pagereader,pagewriter};
+use storage::{PAGE_SIZE, BufPage, PageReader, PageWriter};
 
-use std::io::BufReader;
-use std::io::BufWriter;
-use std::io::Read;
-use std::io::Write;
-use std::io::Seek;
-use std::io::SeekFrom;
-use std::fs::File;
-use std::fs::remove_file;
+use std::collections::BinaryHeap;
+use std::io::{BufReader, BufWriter, Read, Write, Seek, SeekFrom};
+use std::fs::{File, remove_file};
 use std::mem::transmute;
 
-const PAGE_SIZE:usize = 4096;
 const SIZE_OF_I32:usize = 4;
 const _TEMP_FILE1:&str = ".temp_sort_1";
 const FILE_PREFIX:&str = ".temp_sort_";
@@ -49,41 +43,74 @@ pub fn sort(_file: String) -> Result<bool, String> {
     Ok(true)
 }
 
+/// Replacement sort basically
 fn first_pass(_file: String) -> Result<Vec<usize>, String> {
-    let mut f_reader = pagereader::PageReader::new(_file, 0).unwrap();
-    let mut buffer_writer = pagewriter::PageWriter::new(String::from(_TEMP_FILE1), 0, true).unwrap();
+    let mut f_reader = PageReader::new(_file, 0).unwrap();
+    let mut buffer_writer = PageWriter::new(String::from(_TEMP_FILE1), 0, true).unwrap();
+
+    let mut for_next_run: Vec<BufPage::<types::Integer>> = vec![BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
+    let mut output_buf = BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
+    let mut heap: BinaryHeap<types::Integer> = BinaryHeap::<types::Integer>::new();
+
+    let mut max_in_run: types::Integer = types::Integer::new(<i32>::min_value());
+    let mut run_len: usize = 0;
 
     let mut total_read = 0;
     let mut ret = vec![0];
 
     loop {
-        let mut buffer:Vec<types::Integer> = vec![];
+        let mut input_buf: BufPage<types::Integer> = f_reader.consume_page::<types::Integer>();
+        total_read += input_buf.len();
 
-        {
-            let byte_buffer = f_reader.consume_page();
-            total_read += byte_buffer.len();
+        if input_buf.len() == 0 { break; }
 
-            // TODO file is messed up?
-            if byte_buffer.len() % types::Integer::get_size() != 0 { assert!(false, "Wrong byte_buffer size"); }
-            if byte_buffer.len() == 0 { break; }
+        // Loop through new data and
+        //  - if value >= max_in_run: add it to the heap, later to the run
+        //  - else: keep it for the next run
+        for i in input_buf.iter() {
+            if output_buf.len() == 0 || i >= max_in_run {
+                heap.push(i);
+                run_len += types::Integer::SIZE;
+            }
+            else {
+                if for_next_run.last().unwrap().is_full() {
+                    for_next_run.push(BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0));
+                }
 
-            for i in 0..byte_buffer.len()/types::Integer::get_size() {
-                let new_val = types::Integer::from_bytes(&byte_buffer[i * types::Integer::get_size()..(i+1) * types::Integer::get_size()]).unwrap();
-                buffer.push(new_val);
+                for_next_run.last_mut().unwrap().push(&i);
             }
         }
 
-        buffer.sort();
+        // If heap is empty, the current run has ended
+        if heap.is_empty() {
+            ret.push(run_len);
 
-        {
-            let mut output_buffer:Vec<u8> = vec![];
-            for int in buffer.iter() {
-                output_buffer.append(&mut int.to_bytes().unwrap());
+            for buf in for_next_run.iter() {
+                for val in buf.iter() {
+                    heap.push(val);
+                    run_len += types::Integer::SIZE;
+                }
             }
 
-            buffer_writer.store(&output_buffer);
-            ret.push(total_read);
+            for_next_run.clear();
         }
+
+        // Add value in heap to output_buf
+        while let Some(val) = heap.pop() {
+            // Write to disk if buffer is full
+            if output_buf.is_full() {
+                buffer_writer.store(&output_buf);
+                output_buf.clear();
+            }
+
+            output_buf.push(&val);
+            max_in_run = val;
+        }
+    }
+
+    if output_buf.len() > 0 {
+        ret.push(run_len);
+        buffer_writer.store(&output_buf);
     }
 
     Ok(ret)
