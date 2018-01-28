@@ -1,17 +1,12 @@
 use types;
 use types::Type;
-use storage::{PAGE_SIZE, BufPage, PageReader, PageWriter};
+use storage::{PAGE_SIZE, bufpage, PageReader, PageWriter};
 
 use std::collections::BinaryHeap;
-use std::io::{BufReader, BufWriter, Seek, SeekFrom};
-use std::fs::{File, remove_file};
+use std::fs::remove_file;
+use std::iter::Iterator;
 
 const FILE_PREFIX:&str = ".temp_sort_";
-
-struct Run {
-    offset: usize,
-    len: usize
-}
 
 // External sort
 pub fn sort(_file: String) -> Result<bool, String> {
@@ -19,7 +14,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
         Ok(mut runs) => {
             // Subsequent passes
             let mut pass:u32 = 2;
-            loop {
+            while runs.len() > 1 {
                 let merge_result = merge(&runs, pass)
                     .and_then(|new_runs| {
                         runs = new_runs;
@@ -29,7 +24,6 @@ pub fn sort(_file: String) -> Result<bool, String> {
                 assert_eq!(runs[0].offset, 0);
 
                 if !merge_result.is_ok() { return Err(merge_result.unwrap_err()); }
-                if runs.len() == 1 { break; }
                 pass += 1;
             }
         }
@@ -44,8 +38,8 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut f_reader = PageReader::new(_file, 0).unwrap();
     let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0, true).unwrap();
 
-    let mut for_next_run: Vec<BufPage<types::Integer>> = vec![BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
-    let mut output_buf = BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
+    let mut for_next_run: Vec<bufpage::BufPage<types::Integer>> = vec![bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
+    let mut output_buf = bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
     let mut heap: BinaryHeap<types::Integer> = BinaryHeap::<types::Integer>::new();
 
     let mut max_in_run: types::Integer = types::Integer::new(<i32>::min_value());
@@ -55,7 +49,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut ret = vec![Run { offset: 0, len: 0 }];
 
     loop {
-        let mut input_buf: BufPage<types::Integer> = f_reader.consume_page::<types::Integer>();
+        let input_buf: bufpage::BufPage<types::Integer> = f_reader.consume_page::<types::Integer>();
         total_read += input_buf.len();
 
         if input_buf.len() == 0 { break; }
@@ -70,7 +64,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
             }
             else {
                 if for_next_run.last().unwrap().is_full() {
-                    for_next_run.push(BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0));
+                    for_next_run.push(bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0));
                 }
 
                 for_next_run.last_mut().unwrap().push(&i);
@@ -95,11 +89,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
         // Add value in heap to output_buf
         while let Some(val) = heap.pop() {
             // Write to disk if buffer is full
-            if output_buf.is_full() {
-                buffer_writer.store(&output_buf);
-                output_buf.clear();
-            }
-
+            store_if_full(&mut output_buf, &mut buffer_writer);
             output_buf.push(&val);
             max_in_run = val;
         }
@@ -117,64 +107,131 @@ fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
     let last_pass_fname:String = String::from(FILE_PREFIX) + &(pass-1).to_string();
     let cur_pass_fname:String = String::from(FILE_PREFIX) + &(pass).to_string();
 
-    // Open last pass' file
-    let lpass_file:File;
-    match File::open(last_pass_fname.clone()) {
-        Ok(file) => lpass_file = file,
-        Err(_) => return Err(String::from("Can't open last pass' file"))
-    }
-    // Create new file for this pass
-    let cpass_file:File;
-    match File::create(cur_pass_fname) {
-        Ok(file) => cpass_file = file,
-        Err(_) => return Err(String::from("Can't create current pass' file"))
-    }
+    let mut buffer_writer = PageWriter::new(cur_pass_fname, 0, true).unwrap();
+    let mut output_buf = bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
 
-    let mut ret = Vec::new();
+    let mut ret = vec![];
 
     for mut i in 0..runs.len() {
+        // If there's an odd number of runs, just write that run to a new file
+        if i + 1 >= runs.len() {
+            for val in runs[i].iter::<types::Integer>(last_pass_fname.clone()) {
+                store_if_full(&mut output_buf, &mut buffer_writer);
+                output_buf.push(&val);
+            }
+
+            ret.push(Run { ..runs[i] });
+        }
+        else {
+            let mut iter1 = runs[i].iter::<types::Integer>(last_pass_fname.clone());
+            let mut iter2 = runs[i+1].iter::<types::Integer>(last_pass_fname.clone());
+
+            let mut val1 = iter1.next();
+            let mut val2 = iter2.next();
+
+            loop {
+                store_if_full(&mut output_buf, &mut buffer_writer);
+
+                if val1.is_none() && val2.is_none() {
+                    break;
+                }
+                else if val1.is_none() {
+                    output_buf.push(&val2.unwrap());
+                    val2 = iter2.next();
+                }
+                else if val2.is_none() {
+                    output_buf.push(&val1.unwrap());
+                    val1 = iter1.next();
+                }
+                else {
+                    if val1.unwrap() < val2.unwrap() {
+                        output_buf.push(&val1.unwrap());
+                        store_if_full(&mut output_buf, &mut buffer_writer);
+                        output_buf.push(&val2.unwrap());
+                    }
+                    else {
+                        output_buf.push(&val2.unwrap());
+                        store_if_full(&mut output_buf, &mut buffer_writer);
+                        output_buf.push(&val1.unwrap());
+                    }
+                }
+            }
+
+            ret.push(Run { offset: runs[i].offset, len: runs[i].len + runs[i+1].len });
+        }
 
         // Hack to step i by 2, step_by is not stable yet
         i += 1;
     }
 
-    remove_file(last_pass_fname);
+    if output_buf.len() > 0 {
+        buffer_writer.store(&output_buf);
+        output_buf.clear();
+    }
 
+    remove_file(last_pass_fname);
     Ok(ret)
 }
 
-/// Merge 2 given runs of input file 'file' and write to output file with 'writer'
-/// 'run_1_size' is offset_2 - offset_1, 'run_2_size' is 0 if run_2 goes to EOF
-fn merge_runs(file: &File, writer: &mut BufWriter<File>, r1: &Run, r2: &Run) {
-    // Create readers and move them to runs' offsets
-    let mut reader_1 = BufReader::new(file);
-    reader_1.seek(SeekFrom::Start(r1.offset as u64));
-    let mut reader_2 = BufReader::new(file);
-    reader_2.seek(SeekFrom::Start(r2.offset as u64));
+fn store_if_full<T>(buf_page: &mut bufpage::BufPage<T>, writer: &mut PageWriter)
+where T: Type {
+    if buf_page.is_full() {
+        writer.store(&buf_page);
+        buf_page.clear();
+    }
+}
 
-    // Buffers and total bytes read for each run
-    let mut r1_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
-    let mut r1_bytes_read = 0;
-    let mut r2_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
-    let mut r2_bytes_read = 0;
+struct Run {
+    offset: usize,
+    len: usize
+}
 
-    // Merged buffer
-    let mut m_buffer:[u8; PAGE_SIZE] = [0; PAGE_SIZE];
-    let mut m_size = 0;
+impl Run {
+    fn iter<T>(&self, file_name: String) -> RunIterator<T>
+    where T: Type {
+        let mut reader: PageReader = PageReader::new(file_name, self.offset / PAGE_SIZE).unwrap();
+        let first_page = reader.consume_page::<T>();
 
-    loop {
-        // if r1_bytes_read >= r1.size && r2_bytes_read >= r2.size { break; }
+        RunIterator {
+            len: self.len,
+            consumed: 0,
+            reader: reader,
+            buf_page: first_page,
+            buf_page_index: (self.offset % PAGE_SIZE) / T::SIZE
+        }
+    }
+}
 
-        // let mut r1_cur_size = 0;
-        // let mut r2_cur_size = 0;
-        // if r1_bytes_read < r1.size { r1_cur_size = read_page(&mut reader_1, &mut r1_buffer); }
-        // if r2_bytes_read < r2.size { r2_cur_size = read_page(&mut reader_2, &mut r2_buffer); }
+struct RunIterator<T>
+where T: Type {
+    len: usize,
+    consumed: usize,
+    reader: PageReader,
+    buf_page: bufpage::BufPage<T>,
+    buf_page_index: usize,
+}
 
-        // r1_bytes_read += r1_cur_size;
-        // r2_bytes_read += r2_cur_size;
+impl<T> Iterator for RunIterator<T>
+where T: Type {
+    type Item = T::SType;
 
-        // let r1_vec = bytes_to_ints(&r1_buffer, r1_cur_size);
-        // let r2_vec = bytes_to_ints(&r2_buffer, r2_cur_size);
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.consumed == self.len {
+            None
+        }
+        else {
+            // If we have gone through the current page, read a new one in
+            if self.buf_page_index == self.buf_page.len() / T::SIZE {
+                self.buf_page = self.reader.consume_page::<T>();
+                self.buf_page_index = 0;
+            }
+
+            let item:Self::Item = T::from_bytes(&self.buf_page.data()[self.buf_page_index * T::SIZE..(self.buf_page_index + 1) * T::SIZE]).unwrap();
+            self.buf_page_index += 1;
+            self.consumed += T::SIZE;
+
+            Some(item)
+        }
     }
 }
 
