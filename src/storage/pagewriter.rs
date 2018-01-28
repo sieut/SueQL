@@ -1,4 +1,4 @@
-use storage::{PAGE_SIZE, BufPage};
+use storage::{PAGE_SIZE, bufpage};
 use types::Type;
 use std::fs::File;
 use std::io::{Write, Seek, SeekFrom, Result};
@@ -38,7 +38,7 @@ impl PageWriter {
     }
 
     // Type T doesn't really matter here, it's just required
-    pub fn store<T>(&mut self, page: &BufPage<T>) -> Result<()>
+    pub fn store<T>(&mut self, page: &bufpage::BufPage<T>) -> Result<()>
     where T: Type {
         self.file.write_all(page.data().as_slice())
     }
