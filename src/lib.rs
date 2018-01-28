@@ -9,5 +9,5 @@ mod tests {
 pub mod database;
 pub mod table;
 mod storage;
-// mod sort;
+mod sort;
 mod types;
