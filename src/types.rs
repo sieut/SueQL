@@ -34,7 +34,7 @@ impl Type for Integer {
             None
         }
         else {
-            let int_value:i32 = unsafe { transmute::<[u8; Self::SIZE], i32>([bytes[0], bytes[1], bytes[2], bytes[3]]) };
+            let int_value:i32 = unsafe { transmute::<[u8; Self::SIZE], i32>([bytes[3], bytes[2], bytes[1], bytes[0]]) };
             Some(Integer(int_value))
         }
     }
