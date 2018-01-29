@@ -126,7 +126,7 @@ mod test {
     #[test]
     fn test_iter() {
         let mut test_buf: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
-        test_buf[3] = 1; test_buf[7] = 3; test_buf[11] = 10;
+        test_buf[0] = 1; test_buf[4] = 3; test_buf[8] = 10;
 
         let page = bufpage::BufPage::<Integer>::new(&test_buf, 12);
         let mut iter = page.iter();
@@ -144,5 +144,51 @@ mod test {
 
         val = iter.next();
         assert!(val.is_none());
+    }
+
+    #[test]
+    fn test_iter_empty() {
+        let test_buf = [0; PAGE_SIZE];
+        let page = bufpage::BufPage::<Integer>::new(&test_buf, 0);
+        let mut iter = page.iter();
+        let val = iter.next();
+        assert!(val.is_none());
+    }
+
+    #[test]
+    fn test_push() {
+        let test_buf = [0; PAGE_SIZE];
+        let mut page = bufpage::BufPage::<Integer>::new(&test_buf, 0);
+
+        page.push(&Integer::new(20));
+        page.push(&Integer::new(-100));
+
+        let mut iter = page.iter();
+        let mut val;
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), 20);
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), -100);
+    }
+
+    #[test]
+    fn test_iter_mut() {
+        let mut page = bufpage::BufPage::<Integer>::new(&[0; PAGE_SIZE], 0);
+
+        page.push(&Integer::new(20));
+        page.push(&Integer::new(-100));
+
+        {
+            let mut iter_mut = page.iter_mut();
+            iter_mut.next();
+            iter_mut.update(&Integer::new(40));
+        }
+
+        let mut iter = page.iter();
+        let mut val;
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), 40);
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), -100);
     }
 }
