@@ -61,9 +61,22 @@ mod test {
     use types::{Integer, Type};
 
     #[test]
-    fn test_integer() {
-        let buffer = [0, 0, 0, 1];
+    fn test_integer_from_bytes() {
+        let buffer = [1, 0, 0, 0];
         let int = Integer::from_bytes(&buffer);
         assert_eq!(int.unwrap(), Integer::new(1));
+    }
+
+    #[test]
+    fn test_integer_to_bytes() {
+        let int = Integer::new(10);
+        let bytes = int.to_bytes().unwrap();
+
+        assert_eq!(bytes.len(), 4);
+
+        assert_eq!(bytes[0], 10);
+        assert_eq!(bytes[1], 0);
+        assert_eq!(bytes[2], 0);
+        assert_eq!(bytes[3], 0);
     }
 }
