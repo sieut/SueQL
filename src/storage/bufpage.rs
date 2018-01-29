@@ -116,3 +116,33 @@ where T: Type {
 
     fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
 }
+
+mod test {
+    extern crate rand;
+    use storage::PAGE_SIZE;
+    use storage::bufpage;
+    use types::{Integer, Type};
+
+    #[test]
+    fn test_iter() {
+        let mut test_buf: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
+        test_buf[3] = 1; test_buf[7] = 3; test_buf[11] = 10;
+
+        let page = bufpage::BufPage::<Integer>::new(&test_buf, 12);
+        let mut iter = page.iter();
+
+        let mut val;
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), 1);
+        assert_eq!(val.unwrap(), Integer::new(1));
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), 3);
+        assert_eq!(val.unwrap(), Integer::new(3));
+        val = iter.next();
+        assert_eq!(val.unwrap().get_value(), 10);
+        assert_eq!(val.unwrap(), Integer::new(10));
+
+        val = iter.next();
+        assert!(val.is_none());
+    }
+}

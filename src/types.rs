@@ -17,7 +17,7 @@ pub enum ColumnType {
     Int(Integer),
 }
 
-#[derive(Copy, Clone, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Integer(i32);
 
 impl Integer {
@@ -54,5 +54,16 @@ impl Eq for Integer {}
 impl Ord for Integer {
     fn cmp(&self, other: &Integer) -> Ordering {
         self.0.cmp(&other.0)
+    }
+}
+
+mod test {
+    use types::{Integer, Type};
+
+    #[test]
+    fn test_integer() {
+        let buffer = [0, 0, 0, 1];
+        let int = Integer::from_bytes(&buffer);
+        assert_eq!(int.unwrap(), Integer::new(1));
     }
 }
