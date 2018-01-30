@@ -1,6 +1,8 @@
 pub use self::integer::Integer;
+pub use self::char::Char;
 
 mod integer;
+mod char;
 
 pub trait Type {
     type SType;
