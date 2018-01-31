@@ -1,4 +1,4 @@
-use types::Type;
+use storage::Storable;
 use std::cmp::{Eq,Ordering};
 use std::mem::transmute;
 
@@ -9,12 +9,11 @@ impl Char {
     pub fn new(value: u8) -> Char { Char(value) }
 }
 
-impl Type for Char {
-    type SType = Char;
-    type CType = u8;
+impl Storable for Char {
+    type Item = Char;
     const SIZE:usize = 1;
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::SType> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
         if bytes.len() != Self::SIZE {
             None
         }
@@ -25,10 +24,6 @@ impl Type for Char {
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(vec![self.0])
-    }
-
-    fn get_value(&self) -> Self::CType {
-        self.0
     }
 }
 

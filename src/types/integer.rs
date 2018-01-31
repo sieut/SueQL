@@ -1,4 +1,4 @@
-use types::Type;
+use storage::Storable;
 use std::cmp::{Eq,Ordering};
 use std::mem::transmute;
 
@@ -9,12 +9,11 @@ impl Integer {
     pub fn new(value: i32) -> Integer { Integer(value) }
 }
 
-impl Type for Integer {
-    type SType = Integer;
-    type CType = i32;
+impl Storable for Integer {
+    type Item = Integer;
     const SIZE:usize = 4;
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::SType> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
         if bytes.len() != Self::SIZE {
             None
         }
@@ -28,10 +27,6 @@ impl Type for Integer {
         let bytes_arr = unsafe { transmute::<i32, [u8; Self::SIZE]>(self.0) };
         Some(bytes_arr.to_vec())
     }
-
-    fn get_value(&self) -> Self::CType {
-        self.0
-    }
 }
 
 impl Eq for Integer {}
@@ -43,7 +38,7 @@ impl Ord for Integer {
 }
 
 mod test {
-    use types::{Integer, Type};
+    use types::Integer;
 
     #[test]
     fn test_integer_from_bytes() {
