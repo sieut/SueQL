@@ -116,7 +116,8 @@ where T: Storable {
     fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
 }
 
-mod test {
+#[cfg(test)]
+mod tests {
     extern crate rand;
     use storage::PAGE_SIZE;
     use storage::bufpage;

@@ -1,6 +1,5 @@
 use storage::Storable;
 use std::cmp::{Eq,Ordering};
-use std::mem::transmute;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Char(u8);

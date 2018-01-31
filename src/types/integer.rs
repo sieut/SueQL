@@ -37,7 +37,8 @@ impl Ord for Integer {
     }
 }
 
-mod test {
+#[cfg(test)]
+mod tests {
     use types::Integer;
 
     #[test]
