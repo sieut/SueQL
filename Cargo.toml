@@ -5,3 +5,4 @@ authors = ["sieut"]
 
 [dependencies]
 rand="^0.4.1"
+byteorder = "1.2.1"
