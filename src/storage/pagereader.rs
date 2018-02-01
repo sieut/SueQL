@@ -40,7 +40,7 @@ impl PageReader {
     }
 
     pub fn seek(&mut self, page_offset: usize) {
-        self.file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64));
+        self.file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64)).unwrap();
         self.page_offset = page_offset;
     }
 }
