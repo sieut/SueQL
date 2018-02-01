@@ -2,15 +2,15 @@ use storage::{Storable, PAGE_SIZE};
 use types;
 
 /// Table's name is max 31 bytes long, aligning with Column's size, for now
-/// Storage format for Table:
-///     - name: 32 bytes (max 31 bytes + NULL ending bytes)
-///     - columns: rest of page
-/// Total: 4096 bytes (a page)
 pub struct Table {
     name: String,
     columns: Vec<Column>
 }
 
+/// Storage format for Table:
+///     - name: 32 bytes (max 31 bytes + NULL ending bytes)
+///     - columns: rest of page
+/// Total: 4096 bytes (a page)
 impl Storable for Table {
     type Item = Table;
     const SIZE: usize = PAGE_SIZE;
