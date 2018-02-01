@@ -1,6 +1,9 @@
+extern crate byteorder;
+
 use storage::Storable;
+use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
+use std::io::Cursor;
 use std::cmp::{Eq,Ordering};
-use std::mem::transmute;
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
 pub struct Integer(i32);
@@ -18,14 +21,16 @@ impl Storable for Integer {
             None
         }
         else {
-            let int_value:i32 = unsafe { transmute::<[u8; Self::SIZE], i32>([bytes[0], bytes[1], bytes[2], bytes[3]]) };
+            let mut rdr = Cursor::new(&bytes[0..Self::SIZE]);
+            let int_value = rdr.read_i32::<LittleEndian>().unwrap();
             Some(Integer(int_value))
         }
     }
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
-        let bytes_arr = unsafe { transmute::<i32, [u8; Self::SIZE]>(self.0) };
-        Some(bytes_arr.to_vec())
+        let mut ret = vec![];
+        ret.write_i32::<LittleEndian>(self.0);
+        Some(ret)
     }
 }
 
@@ -40,6 +45,7 @@ impl Ord for Integer {
 #[cfg(test)]
 mod tests {
     use types::Integer;
+    use storage::Storable;
 
     #[test]
     fn test_integer_from_bytes() {
