@@ -14,3 +14,16 @@ pub fn string_from_bytes(bytes: &[u8]) -> Option<String> {
         Err(_) => None
     }
 }
+
+/// Convert a String to bytes vec, max_len includes the NULL ending byte
+pub fn string_to_bytes(string: &String, max_len: usize) -> Option<Vec<u8>> {
+    let mut ret:Vec<u8> = string.clone().into_bytes();
+    if ret.len() >= max_len {
+        None
+    }
+    else {
+        let ret_len = ret.len();
+        ret.append(&mut vec![0; max_len - ret_len]);
+        Some(ret)
+    }
+}
