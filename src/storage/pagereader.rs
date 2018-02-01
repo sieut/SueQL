@@ -12,7 +12,7 @@ impl PageReader {
     pub fn new(file_name: String, page_offset: usize) -> Option<PageReader> {
         match File::open(file_name.clone()) {
             Ok(mut file) => {
-                file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64));
+                file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64)).unwrap();
                 Some(PageReader {
                     file_name: file_name.clone(),
                     page_offset: page_offset,

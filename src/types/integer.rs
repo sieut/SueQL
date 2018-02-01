@@ -29,7 +29,7 @@ impl Storable for Integer {
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
         let mut ret = vec![];
-        ret.write_i32::<LittleEndian>(self.0);
+        ret.write_i32::<LittleEndian>(self.0).unwrap();
         Some(ret)
     }
 }

@@ -24,7 +24,7 @@ impl PageWriter {
         } else {
             match File::open(file_name.clone()) {
                 Ok(mut file) => {
-                    file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64));
+                    file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64)).unwrap();
                     Some(PageWriter {
                         file_name: file_name.clone(),
                         page_offset: page_offset,
