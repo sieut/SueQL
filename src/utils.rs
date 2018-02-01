@@ -10,7 +10,7 @@ pub fn string_from_bytes(bytes: &[u8]) -> Option<String> {
     }
 
     match String::from_utf8(bytes[0..splitting_idx].iter().cloned().collect()) {
-        Ok(name) => Some(name),
+        Ok(val) => Some(val),
         Err(_) => None
     }
 }
