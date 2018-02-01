@@ -67,6 +67,9 @@ impl Storable for Database {
             ret.append(&mut utils::string_to_bytes(&disk_ptr, 32).unwrap());
         }
 
+        let cur_len = ret.len();
+        ret.append(&mut vec![0; Self::SIZE - cur_len]);
+
         Some(ret)
     }
 }
