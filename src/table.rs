@@ -1,5 +1,6 @@
 use storage::{Storable, PAGE_SIZE};
 use types;
+use utils;
 
 /// Table's name is max 31 bytes long, aligning with Column's size, for now
 pub struct Table {
@@ -18,31 +19,34 @@ impl Storable for Table {
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
         if bytes.len() != Self::SIZE { return None; }
 
-        let mut splitting_idx = 32;
-        for (idx, val) in bytes[0..32].iter().enumerate() {
-            if *val == 0 {
-                splitting_idx = idx;
-                break;
-            }
+        let name = utils::string_from_bytes(&bytes[0..32]).unwrap();
+
+        let mut columns = vec![];
+        let mut iter = bytes.chunks(32);
+        iter.next();                    // Skip the first chunk (table_name)
+        while let Some(chunk) = iter.next() {
+            let col = Column::from_bytes(&chunk);
+            if col.is_some() { columns.push(col.unwrap()); }
+            else { break; }
         }
 
-        match String::from_utf8(bytes[0..splitting_idx].iter().cloned().collect()) {
-            Ok(name) => {
-                let mut columns = vec![];
-                for i in 1..PAGE_SIZE/Column::SIZE {
-                    let col = Column::from_bytes(&bytes[i * Column::SIZE..(i + 1) * Column::SIZE]);
-                    if col.is_some() { columns.push(col.unwrap()); }
-                    else { break; }
-                }
-
-                Some(Table { name: name, columns: columns })
-            }
-            Err(_) => None
-        }
+        Some(Table { name: name, columns: columns })
     }
 
+    // TODO implement
     fn to_bytes(&self) -> Option<Vec<u8>> {
-        None
+        let mut ret:Vec<u8> = vec![];
+
+        ret.append(&mut utils::string_to_bytes(&self.name, 32).unwrap());
+
+        for col in self.columns.iter() {
+            ret.append(&mut col.to_bytes().unwrap());
+        }
+
+        let cur_len = ret.len();
+        ret.append(&mut vec![0; Self::SIZE - cur_len]);
+
+        Some(ret)
     }
 }
 
@@ -64,27 +68,17 @@ impl Storable for Column {
         if bytes.len() != Self::SIZE { return None; }
 
         let column_type = types::ColumnType::from_bytes(&[bytes[31]]).unwrap();
+        let name = utils::string_from_bytes(&bytes[0..31]).unwrap();
 
-        let mut splitting_idx = 31;
-        for (idx, val) in bytes[0..31].iter().enumerate() {
-            if *val == 0 {
-                splitting_idx = idx;
-                break;
-            }
-        }
-
-        match String::from_utf8(bytes[0..splitting_idx].iter().cloned().collect()) {
-            Ok(name) => Some(Column { name: name, column_type: column_type }),
-            Err(_) => None
-        }
+        Some(Column {
+            name: name,
+            column_type: column_type
+        })
     }
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
-        let mut ret = self.name.clone().into_bytes();
-        assert!(ret.len() <= 30);
-
-        let name_bytes_count = ret.len();
-        ret.append(&mut vec![0; 31 - name_bytes_count]);
+        let mut ret:Vec<u8> = vec![];
+        ret.append(&mut utils::string_to_bytes(&self.name, 31).unwrap());
         ret.append(&mut self.column_type.to_bytes().unwrap());
         assert_eq!(ret.len(), 32);
 
