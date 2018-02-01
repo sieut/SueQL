@@ -133,13 +133,10 @@ mod tests {
 
         let mut val;
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), 1);
         assert_eq!(val.unwrap(), Integer::new(1));
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), 3);
         assert_eq!(val.unwrap(), Integer::new(3));
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), 10);
         assert_eq!(val.unwrap(), Integer::new(10));
 
         val = iter.next();
@@ -166,9 +163,9 @@ mod tests {
         let mut iter = page.iter();
         let mut val;
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), 20);
+        assert_eq!(val.unwrap(), Integer::new(20));
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), -100);
+        assert_eq!(val.unwrap(), Integer::new(-100));
     }
 
     #[test]
@@ -187,8 +184,8 @@ mod tests {
         let mut iter = page.iter();
         let mut val;
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), 40);
+        assert_eq!(val.unwrap(), Integer::new(40));
         val = iter.next();
-        assert_eq!(val.unwrap().get_value(), -100);
+        assert_eq!(val.unwrap(), Integer::new(-100));
     }
 }
