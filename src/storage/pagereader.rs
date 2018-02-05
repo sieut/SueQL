@@ -23,8 +23,7 @@ impl PageReader {
         }
     }
 
-    pub fn consume_page<T>(&mut self) -> bufpage::BufPage<T>
-    where T: Storable {
+    pub fn consume_page(&mut self) -> bufpage::BufPage {
         let mut buffer = [0; PAGE_SIZE];
         let mut bytes_read = 0;
 
@@ -36,7 +35,7 @@ impl PageReader {
             }
         }
 
-        bufpage::BufPage::<T>::new(&buffer, bytes_read)
+        bufpage::BufPage::new(&buffer, bytes_read)
     }
 
     pub fn seek(&mut self, page_offset: usize) {
