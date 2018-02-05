@@ -1,4 +1,4 @@
-use storage::Storable;
+use storage::FixedStorable;
 use std::cmp::{Eq,Ordering};
 
 #[derive(Copy, Clone, PartialEq, PartialOrd, Debug)]
@@ -8,7 +8,7 @@ impl Char {
     pub fn new(value: u8) -> Char { Char(value) }
 }
 
-impl Storable for Char {
+impl FixedStorable for Char {
     type Item = Char;
     const SIZE:usize = 1;
 

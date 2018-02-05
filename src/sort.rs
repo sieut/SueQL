@@ -1,5 +1,5 @@
 use types;
-use storage::{Storable, PAGE_SIZE, bufpage, PageReader, PageWriter};
+use storage::{FixedStorable, PAGE_SIZE, bufpage, PageReader, PageWriter};
 
 use std::collections::BinaryHeap;
 use std::fs::remove_file;
@@ -173,7 +173,7 @@ fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
 }
 
 fn store_if_full<T>(buf_page: &mut bufpage::BufPage<T>, writer: &mut PageWriter)
-where T: Storable {
+where T: FixedStorable {
     if buf_page.is_full() {
         writer.store(&buf_page);
         buf_page.clear();
@@ -187,7 +187,7 @@ struct Run {
 
 impl Run {
     fn iter<T>(&self, file_name: String) -> RunIterator<T>
-    where T: Storable {
+    where T: FixedStorable {
         let mut reader: PageReader = PageReader::new(file_name, self.offset / PAGE_SIZE).unwrap();
         let first_page = reader.consume_page::<T>();
 
@@ -202,7 +202,7 @@ impl Run {
 }
 
 struct RunIterator<T>
-where T: Storable {
+where T: FixedStorable {
     len: usize,
     consumed: usize,
     reader: PageReader,
@@ -211,7 +211,7 @@ where T: Storable {
 }
 
 impl<T> Iterator for RunIterator<T>
-where T: Storable {
+where T: FixedStorable {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {

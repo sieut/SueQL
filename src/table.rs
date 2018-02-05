@@ -1,4 +1,4 @@
-use storage::{Storable, PAGE_SIZE};
+use storage::{FixedStorable, PAGE_SIZE};
 use types;
 use utils;
 
@@ -12,7 +12,7 @@ pub struct Table {
 ///     - name: 32 bytes (max 31 bytes + NULL ending bytes)
 ///     - columns: rest of page
 /// Total: 4096 bytes (a page)
-impl Storable for Table {
+impl FixedStorable for Table {
     type Item = Table;
     const SIZE: usize = PAGE_SIZE;
 
@@ -60,7 +60,7 @@ pub struct Column {
 ///     - name: 31 bytes (max 30 bytes + NULL ending bytes)
 ///     - column_type: 1 byte
 /// Total: 32 bytes
-impl Storable for Column {
+impl FixedStorable for Column {
     type Item = Column;
     const SIZE: usize = 32;
 
