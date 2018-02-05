@@ -2,24 +2,20 @@ use storage::{Storable, PAGE_SIZE};
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
-pub struct BufPage<T>
-where T: Storable {
+pub struct BufPage {
     data: Vec<u8>,
-    data_type: PhantomData<T>
 }
 
-impl<T> BufPage<T>
-where T: Storable {
-    pub fn new(data_buffer: &[u8; PAGE_SIZE], data_size: usize) -> BufPage<T> {
-        assert_eq!(data_size % T::SIZE, 0);
-        BufPage::<T> {
+impl BufPage {
+    pub fn new(data_buffer: &[u8; PAGE_SIZE], data_size: usize) -> BufPage {
+        BufPage {
             data: data_buffer[0..data_size].to_vec(),
-            data_type: PhantomData
         }
     }
 
-    pub fn push(&mut self, value: &T) {
-        assert!(self.data.len() < PAGE_SIZE);
+    pub fn push<T>(&mut self, value: &T)
+    where T: Storable {
+        assert!(self.data.len() + value.get_size() < PAGE_SIZE);
         self.data.append(&mut value.to_bytes().unwrap());
     }
 
@@ -32,26 +28,31 @@ where T: Storable {
     pub fn is_full(&self) -> bool { self.data.len() == PAGE_SIZE }
 
     // TODO is passing self to Iter, instead of &self right?
-    pub fn iter(&self) -> Iter<T> {
+    pub fn iter<T>(&self) -> Iter<T>
+    where T: Storable {
         Iter {
             buf_page: self,
-            index: 0
+            index: 0,
+            phantom: PhantomData
         }
     }
 
     // TODO is passing self to Iter, instead of &self right?
-    pub fn iter_mut(&mut self) -> IterMut<T> {
+    pub fn iter_mut<T>(&mut self) -> IterMut<T>
+    where T: Storable {
         IterMut {
             buf_page: self,
-            index: 0
+            index: 0,
+            phantom: PhantomData
         }
     }
 }
 
 pub struct Iter<'a, T: 'a>
 where T: Storable {
-    buf_page: &'a BufPage<T>,
+    buf_page: &'a BufPage,
     index: usize,
+    phantom: PhantomData<T>,
 }
 
 impl<'a, T> Iterator for Iter<'a, T>
@@ -75,8 +76,9 @@ where T: Storable {
 
 pub struct IterMut<'a, T: 'a>
 where T: Storable {
-    buf_page: &'a mut BufPage<T>,
+    buf_page: &'a mut BufPage,
     index: usize,
+    phantom: PhantomData<T>,
 }
 
 impl<'a, T> IterMut<'a, T>
@@ -128,8 +130,8 @@ mod tests {
         let mut test_buf: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
         test_buf[0] = 1; test_buf[4] = 3; test_buf[8] = 10;
 
-        let page = bufpage::BufPage::<Integer>::new(&test_buf, 12);
-        let mut iter = page.iter();
+        let page = bufpage::BufPage::new(&test_buf, 12);
+        let mut iter = page.iter::<Integer>();
 
         let mut val;
         val = iter.next();
@@ -146,8 +148,8 @@ mod tests {
     #[test]
     fn test_iter_empty() {
         let test_buf = [0; PAGE_SIZE];
-        let page = bufpage::BufPage::<Integer>::new(&test_buf, 0);
-        let mut iter = page.iter();
+        let page = bufpage::BufPage::new(&test_buf, 0);
+        let mut iter = page.iter::<Integer>();
         let val = iter.next();
         assert!(val.is_none());
     }
@@ -155,12 +157,12 @@ mod tests {
     #[test]
     fn test_push() {
         let test_buf = [0; PAGE_SIZE];
-        let mut page = bufpage::BufPage::<Integer>::new(&test_buf, 0);
+        let mut page = bufpage::BufPage::new(&test_buf, 0);
 
-        page.push(&Integer::new(20));
-        page.push(&Integer::new(-100));
+        page.push::<Integer>(&Integer::new(20));
+        page.push::<Integer>(&Integer::new(-100));
 
-        let mut iter = page.iter();
+        let mut iter = page.iter::<Integer>();
         let mut val;
         val = iter.next();
         assert_eq!(val.unwrap(), Integer::new(20));
@@ -170,18 +172,18 @@ mod tests {
 
     #[test]
     fn test_iter_mut() {
-        let mut page = bufpage::BufPage::<Integer>::new(&[0; PAGE_SIZE], 0);
+        let mut page = bufpage::BufPage::new(&[0; PAGE_SIZE], 0);
 
-        page.push(&Integer::new(20));
-        page.push(&Integer::new(-100));
+        page.push::<Integer>(&Integer::new(20));
+        page.push::<Integer>(&Integer::new(-100));
 
         {
-            let mut iter_mut = page.iter_mut();
+            let mut iter_mut = page.iter_mut::<Integer>();
             iter_mut.next();
             iter_mut.update(&Integer::new(40));
         }
 
-        let mut iter = page.iter();
+        let mut iter = page.iter::<Integer>();
         let mut val;
         val = iter.next();
         assert_eq!(val.unwrap(), Integer::new(40));
