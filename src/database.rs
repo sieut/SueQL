@@ -83,8 +83,8 @@ impl Database {
         match self.table_disk_ptrs.get(name) {
             Some(disk_ptr) => {
                 let mut reader = PageReader::new((*disk_ptr).clone(), 0).unwrap();
-                let table_info_page = reader.consume_page::<Table>();
-                Some(table_info_page.iter().next().unwrap())
+                let table_info_page = reader.consume_page();
+                Some(table_info_page.iter::<Table>().next().unwrap())
             }
             None => None
         }
