@@ -1,7 +1,7 @@
 extern crate byteorder;
 
 use table::Table;
-use storage::{PageReader, bufpage, Storable, PAGE_SIZE};
+use storage::{PageReader, Storable, PAGE_SIZE};
 use utils;
 use self::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
