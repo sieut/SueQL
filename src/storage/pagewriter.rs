@@ -36,6 +36,7 @@ impl PageWriter {
         }
     }
 
+    // TODO update page offset
     // Storable T doesn't really matter here, it's just required
     pub fn store<T>(&mut self, page: &bufpage::BufPage<T>) -> Result<()>
     where T: Storable {
