@@ -1,7 +1,7 @@
 extern crate byteorder;
 
 use table::Table;
-use storage::{PageReader, FixedStorable, PAGE_SIZE};
+use storage::{PageReader, Storable, PAGE_SIZE};
 use utils;
 use self::byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
@@ -23,7 +23,7 @@ pub struct Database {
 ///         - table_name: 32 bytes (max 31 bytes + NULL ending bytes)
 ///         - file_name: 32 bytes (same as table_name)
 /// Total: 4096 bytes (a page)
-impl FixedStorable for Database {
+impl Storable for Database {
     type Item = Database;
     const SIZE: usize = PAGE_SIZE;
 

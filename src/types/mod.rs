@@ -1,4 +1,4 @@
-use storage::FixedStorable;
+use storage::Storable;
 
 pub use self::integer::Integer;
 pub use self::char::Char;
@@ -12,7 +12,7 @@ pub enum ColumnType {
     Int,
 }
 
-impl FixedStorable for ColumnType {
+impl Storable for ColumnType {
     type Item = ColumnType;
     const SIZE: usize = 1;
 

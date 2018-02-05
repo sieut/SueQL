@@ -1,6 +1,6 @@
 extern crate byteorder;
 
-use storage::FixedStorable;
+use storage::Storable;
 use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use std::io::Cursor;
 use std::cmp::{Eq,Ordering};
@@ -12,7 +12,7 @@ impl Integer {
     pub fn new(value: i32) -> Integer { Integer(value) }
 }
 
-impl FixedStorable for Integer {
+impl Storable for Integer {
     type Item = Integer;
     const SIZE:usize = 4;
 
@@ -45,7 +45,7 @@ impl Ord for Integer {
 #[cfg(test)]
 mod tests {
     use types::Integer;
-    use storage::FixedStorable;
+    use storage::Storable;
 
     #[test]
     fn test_integer_from_bytes() {

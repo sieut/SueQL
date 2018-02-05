@@ -1,4 +1,4 @@
-pub trait FixedStorable {
+pub trait Storable {
     type Item;
     const SIZE: usize;
 

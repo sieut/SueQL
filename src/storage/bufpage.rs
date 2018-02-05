@@ -1,15 +1,15 @@
-use storage::{FixedStorable, PAGE_SIZE};
+use storage::{Storable, PAGE_SIZE};
 use std::iter::Iterator;
 use std::marker::PhantomData;
 
 pub struct BufPage<T>
-where T: FixedStorable {
+where T: Storable {
     data: Vec<u8>,
     data_type: PhantomData<T>
 }
 
 impl<T> BufPage<T>
-where T: FixedStorable {
+where T: Storable {
     pub fn new(data_buffer: &[u8; PAGE_SIZE], data_size: usize) -> BufPage<T> {
         assert_eq!(data_size % T::SIZE, 0);
         BufPage::<T> {
@@ -49,13 +49,13 @@ where T: FixedStorable {
 }
 
 pub struct Iter<'a, T: 'a>
-where T: FixedStorable {
+where T: Storable {
     buf_page: &'a BufPage<T>,
     index: usize,
 }
 
 impl<'a, T> Iterator for Iter<'a, T>
-where T: FixedStorable {
+where T: Storable {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -74,13 +74,13 @@ where T: FixedStorable {
 }
 
 pub struct IterMut<'a, T: 'a>
-where T: FixedStorable {
+where T: Storable {
     buf_page: &'a mut BufPage<T>,
     index: usize,
 }
 
 impl<'a, T> IterMut<'a, T>
-where T: FixedStorable {
+where T: Storable {
     /// Update buf_page's underlying data buffer at self.index - 1
     /// The reason is that an item should be consumed and processed, before getting updated
     pub fn update(&mut self, new_value: &T) {
@@ -98,7 +98,7 @@ where T: FixedStorable {
 }
 
 impl<'a, T> Iterator for IterMut<'a, T>
-where T: FixedStorable {
+where T: Storable {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {

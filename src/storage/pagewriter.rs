@@ -1,4 +1,4 @@
-use storage::{FixedStorable, PAGE_SIZE, bufpage};
+use storage::{Storable, PAGE_SIZE, bufpage};
 use std::fs::File;
 use std::io::{Write, Seek, SeekFrom, Result};
 
@@ -37,9 +37,9 @@ impl PageWriter {
     }
 
     // TODO update page offset
-    // FixedStorable T doesn't really matter here, it's just required
+    // Storable T doesn't really matter here, it's just required
     pub fn store<T>(&mut self, page: &bufpage::BufPage<T>) -> Result<()>
-    where T: FixedStorable {
+    where T: Storable {
         self.file.write_all(page.data().as_slice())
     }
 }
