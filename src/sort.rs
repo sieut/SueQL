@@ -4,6 +4,7 @@ use storage::{Storable, PAGE_SIZE, bufpage, PageReader, PageWriter};
 use std::collections::BinaryHeap;
 use std::fs::remove_file;
 use std::iter::Iterator;
+use std::marker::PhantomData;
 
 const FILE_PREFIX:&str = ".temp_sort_";
 
@@ -37,8 +38,8 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut f_reader = PageReader::new(_file, 0).unwrap();
     let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0, true).unwrap();
 
-    let mut for_next_run: Vec<bufpage::BufPage<types::Integer>> = vec![bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0)];
-    let mut output_buf = bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
+    let mut for_next_run: Vec<bufpage::BufPage> = vec![bufpage::BufPage::new(&[0; PAGE_SIZE], 0)];
+    let mut output_buf = bufpage::BufPage::new(&[0; PAGE_SIZE], 0);
     let mut heap: BinaryHeap<types::Integer> = BinaryHeap::<types::Integer>::new();
 
     let mut max_in_run: types::Integer = types::Integer::new(<i32>::min_value());
@@ -48,7 +49,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut ret = vec![Run { offset: 0, len: 0 }];
 
     loop {
-        let input_buf: bufpage::BufPage<types::Integer> = f_reader.consume_page::<types::Integer>();
+        let input_buf: bufpage::BufPage = f_reader.consume_page();
         total_read += input_buf.len();
 
         if input_buf.len() == 0 { break; }
@@ -56,14 +57,14 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
         // Loop through new data and
         //  - if value >= max_in_run: add it to the heap, later to the run
         //  - else: keep it for the next run
-        for i in input_buf.iter() {
+        for i in input_buf.iter::<types::Integer>() {
             if output_buf.len() == 0 || i >= max_in_run {
                 heap.push(i);
                 run_len += types::Integer::SIZE;
             }
             else {
                 if for_next_run.last().unwrap().is_full() {
-                    for_next_run.push(bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0));
+                    for_next_run.push(bufpage::BufPage::new(&[0; PAGE_SIZE], 0));
                 }
 
                 for_next_run.last_mut().unwrap().push(&i);
@@ -76,7 +77,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
             ret.push(Run { offset: total_read, len: 0 });
 
             for buf in for_next_run.iter() {
-                for val in buf.iter() {
+                for val in buf.iter::<types::Integer>() {
                     heap.push(val);
                     run_len += types::Integer::SIZE;
                 }
@@ -107,7 +108,7 @@ fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
     let cur_pass_fname:String = String::from(FILE_PREFIX) + &(pass).to_string();
 
     let mut buffer_writer = PageWriter::new(cur_pass_fname, 0, true).unwrap();
-    let mut output_buf = bufpage::BufPage::<types::Integer>::new(&[0; PAGE_SIZE], 0);
+    let mut output_buf = bufpage::BufPage::new(&[0; PAGE_SIZE], 0);
 
     let mut ret = vec![];
 
@@ -172,8 +173,7 @@ fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
     Ok(ret)
 }
 
-fn store_if_full<T>(buf_page: &mut bufpage::BufPage<T>, writer: &mut PageWriter)
-where T: Storable {
+fn store_if_full(buf_page: &mut bufpage::BufPage, writer: &mut PageWriter) {
     if buf_page.is_full() {
         writer.store(&buf_page);
         buf_page.clear();
@@ -189,14 +189,15 @@ impl Run {
     fn iter<T>(&self, file_name: String) -> RunIterator<T>
     where T: Storable {
         let mut reader: PageReader = PageReader::new(file_name, self.offset / PAGE_SIZE).unwrap();
-        let first_page = reader.consume_page::<T>();
+        let first_page = reader.consume_page();
 
         RunIterator {
             len: self.len,
             consumed: 0,
             reader: reader,
             buf_page: first_page,
-            buf_page_index: (self.offset % PAGE_SIZE) / T::SIZE
+            buf_page_index: (self.offset % PAGE_SIZE) / T::SIZE,
+            phantom: PhantomData,
         }
     }
 }
@@ -206,8 +207,9 @@ where T: Storable {
     len: usize,
     consumed: usize,
     reader: PageReader,
-    buf_page: bufpage::BufPage<T>,
+    buf_page: bufpage::BufPage,
     buf_page_index: usize,
+    phantom: PhantomData<T>,
 }
 
 impl<T> Iterator for RunIterator<T>
@@ -221,7 +223,7 @@ where T: Storable {
         else {
             // If we have gone through the current page, read a new one in
             if self.buf_page_index == self.buf_page.len() / T::SIZE {
-                self.buf_page = self.reader.consume_page::<T>();
+                self.buf_page = self.reader.consume_page();
                 self.buf_page_index = 0;
             }
 
