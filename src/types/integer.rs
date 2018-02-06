@@ -14,14 +14,14 @@ impl Integer {
 
 impl Storable for Integer {
     type Item = Integer;
-    const SIZE:usize = 4;
+    const SIZE: Option<usize> = Some(4);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
-        if bytes.len() != Self::SIZE {
+        if bytes.len() != Self::SIZE.unwrap() {
             None
         }
         else {
-            let mut rdr = Cursor::new(&bytes[0..Self::SIZE]);
+            let mut rdr = Cursor::new(&bytes[0..Self::SIZE.unwrap()]);
             let int_value = rdr.read_i32::<LittleEndian>().unwrap();
             Some(Integer(int_value))
         }

@@ -10,10 +10,10 @@ impl Char {
 
 impl Storable for Char {
     type Item = Char;
-    const SIZE:usize = 1;
+    const SIZE: Option<usize> = Some(1);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
-        if bytes.len() != Self::SIZE {
+        if bytes.len() != Self::SIZE.unwrap() {
             None
         }
         else {

@@ -14,10 +14,10 @@ pub struct Table {
 /// Total: 4096 bytes (a page)
 impl Storable for Table {
     type Item = Table;
-    const SIZE: usize = PAGE_SIZE;
+    const SIZE: Option<usize> = Some(PAGE_SIZE);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
-        if bytes.len() != Self::SIZE { return None; }
+        if bytes.len() != Self::SIZE.unwrap() { return None; }
 
         let name = utils::string_from_bytes(&bytes[0..32]).unwrap();
 
@@ -44,7 +44,7 @@ impl Storable for Table {
         }
 
         let cur_len = ret.len();
-        ret.append(&mut vec![0; Self::SIZE - cur_len]);
+        ret.append(&mut vec![0; Self::SIZE.unwrap() - cur_len]);
 
         Some(ret)
     }
@@ -62,10 +62,10 @@ pub struct Column {
 /// Total: 32 bytes
 impl Storable for Column {
     type Item = Column;
-    const SIZE: usize = 32;
+    const SIZE: Option<usize> = Some(32);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
-        if bytes.len() != Self::SIZE { return None; }
+        if bytes.len() != Self::SIZE.unwrap() { return None; }
 
         let column_type = types::ColumnType::from_bytes(&[bytes[31]]).unwrap();
         let name = utils::string_from_bytes(&bytes[0..31]).unwrap();

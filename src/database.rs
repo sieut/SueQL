@@ -25,10 +25,10 @@ pub struct Database {
 /// Total: 4096 bytes (a page)
 impl Storable for Database {
     type Item = Database;
-    const SIZE: usize = PAGE_SIZE;
+    const SIZE: Option<usize> = Some(PAGE_SIZE);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
-        if bytes.len() != PAGE_SIZE {
+        if bytes.len() != Self::SIZE.unwrap() {
             return None;
         }
 
@@ -68,7 +68,7 @@ impl Storable for Database {
         }
 
         let cur_len = ret.len();
-        ret.append(&mut vec![0; Self::SIZE - cur_len]);
+        ret.append(&mut vec![0; Self::SIZE.unwrap() - cur_len]);
 
         Some(ret)
     }

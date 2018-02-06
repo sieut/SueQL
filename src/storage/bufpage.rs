@@ -15,7 +15,7 @@ impl BufPage {
 
     pub fn push<T>(&mut self, value: &T)
     where T: Storable {
-        assert!(self.data.len() + value.get_size() < PAGE_SIZE);
+        assert!(self.data.len() + T::get_size() < PAGE_SIZE);
         self.data.append(&mut value.to_bytes().unwrap());
     }
 
@@ -60,18 +60,18 @@ where T: Storable {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.buf_page.data.len() / T::SIZE {
+        if self.index == self.buf_page.data.len() / T::get_size() {
             None
         }
         else {
-            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
+            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::get_size()..(self.index + 1) * T::get_size()]).unwrap();
             self.index += 1;
 
             Some(item)
         }
     }
 
-    fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
+    fn count(self) -> usize { self.buf_page.data.len() / T::get_size() }
 }
 
 pub struct IterMut<'a, T: 'a>
@@ -90,10 +90,10 @@ where T: Storable {
         assert!(self.index != 0);
 
         let new_bytes = new_value.to_bytes().unwrap();
-        assert_eq!(new_bytes.len(), T::SIZE);
+        assert_eq!(new_bytes.len(), T::get_size());
 
         for i in 0..new_bytes.len() {
-            let buf_page_index = (self.index - 1) * T::SIZE + i;
+            let buf_page_index = (self.index - 1) * T::get_size() + i;
             self.buf_page.data[buf_page_index] = new_bytes[i];
         }
     }
@@ -104,18 +104,18 @@ where T: Storable {
     type Item = T::Item;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index >= self.buf_page.data.len() / T::SIZE {
+        if self.index >= self.buf_page.data.len() / T::get_size() {
             None
         }
         else {
-            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::SIZE..(self.index + 1) * T::SIZE]).unwrap();
+            let item:Self::Item = T::from_bytes(&self.buf_page.data[self.index * T::get_size()..(self.index + 1) * T::get_size()]).unwrap();
             self.index += 1;
 
             Some(item)
         }
     }
 
-    fn count(self) -> usize { self.buf_page.data.len() / T::SIZE }
+    fn count(self) -> usize { self.buf_page.data.len() / T::get_size() }
 }
 
 #[cfg(test)]

@@ -14,7 +14,7 @@ pub enum ColumnType {
 
 impl Storable for ColumnType {
     type Item = ColumnType;
-    const SIZE: usize = 1;
+    const SIZE: Option<usize> = Some(1);
 
     fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
         if bytes.len() != 1 {
