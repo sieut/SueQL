@@ -60,7 +60,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
         for i in input_buf.iter::<types::Integer>() {
             if output_buf.len() == 0 || i >= max_in_run {
                 heap.push(i);
-                run_len += types::Integer::get_size();
+                run_len += types::Integer::get_size().unwrap();
             }
             else {
                 if for_next_run.last().unwrap().is_full() {
@@ -79,7 +79,7 @@ fn first_pass(_file: String) -> Result<Vec<Run>, String> {
             for buf in for_next_run.iter() {
                 for val in buf.iter::<types::Integer>() {
                     heap.push(val);
-                    run_len += types::Integer::get_size();
+                    run_len += types::Integer::get_size().unwrap();
                 }
             }
 
@@ -196,7 +196,7 @@ impl Run {
             consumed: 0,
             reader: reader,
             buf_page: first_page,
-            buf_page_index: (self.offset % PAGE_SIZE) / T::get_size(),
+            buf_page_index: (self.offset % PAGE_SIZE) / T::get_size().unwrap(),
             phantom: PhantomData,
         }
     }
@@ -222,14 +222,15 @@ where T: Storable {
         }
         else {
             // If we have gone through the current page, read a new one in
-            if self.buf_page_index == self.buf_page.len() / T::get_size() {
+            if self.buf_page_index == self.buf_page.len() / T::get_size().unwrap() {
                 self.buf_page = self.reader.consume_page();
                 self.buf_page_index = 0;
             }
 
-            let item:Self::Item = T::from_bytes(&self.buf_page.data()[self.buf_page_index * T::get_size()..(self.buf_page_index + 1) * T::get_size()]).unwrap();
+            let item:Self::Item = T::from_bytes(&self.buf_page.data()[self.buf_page_index * T::get_size().unwrap()
+                                                ..(self.buf_page_index + 1) * T::get_size().unwrap()]).unwrap();
             self.buf_page_index += 1;
-            self.consumed += T::get_size();
+            self.consumed += T::get_size().unwrap();
 
             Some(item)
         }

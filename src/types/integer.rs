@@ -13,14 +13,12 @@ impl Integer {
 }
 
 impl Storable for Integer {
-    const SIZE: Option<usize> = Some(4);
-
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != Self::SIZE.unwrap() {
+        if bytes.len() != Self::get_size().unwrap() {
             None
         }
         else {
-            let mut rdr = Cursor::new(&bytes[0..Self::SIZE.unwrap()]);
+            let mut rdr = Cursor::new(&bytes[0..Self::get_size().unwrap()]);
             let int_value = rdr.read_i32::<LittleEndian>().unwrap();
             Some(Integer(int_value))
         }
@@ -31,6 +29,8 @@ impl Storable for Integer {
         ret.write_i32::<LittleEndian>(self.0).unwrap();
         Some(ret)
     }
+
+    fn get_size() -> Option<usize> { Some(4) }
 }
 
 impl Eq for Integer {}

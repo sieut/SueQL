@@ -13,8 +13,6 @@ pub enum ColumnType {
 }
 
 impl Storable for ColumnType {
-    const SIZE: Option<usize> = Some(1);
-
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != 1 {
             None
@@ -34,4 +32,6 @@ impl Storable for ColumnType {
             &ColumnType::Char => Some(vec![254]),
         }
     }
+
+    fn get_size() -> Option<usize> { Some(1) }
 }

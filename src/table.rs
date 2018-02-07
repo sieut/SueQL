@@ -13,10 +13,8 @@ pub struct Table {
 ///     - columns: rest of page
 /// Total: 4096 bytes (a page)
 impl Storable for Table {
-    const SIZE: Option<usize> = Some(PAGE_SIZE);
-
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != Self::SIZE.unwrap() { return None; }
+        if bytes.len() != Self::get_size().unwrap() { return None; }
 
         let name = utils::string_from_bytes(&bytes[0..32]).unwrap();
 
@@ -43,10 +41,12 @@ impl Storable for Table {
         }
 
         let cur_len = ret.len();
-        ret.append(&mut vec![0; Self::SIZE.unwrap() - cur_len]);
+        ret.append(&mut vec![0; Self::get_size().unwrap() - cur_len]);
 
         Some(ret)
     }
+
+    fn get_size() -> Option<usize> { Some(PAGE_SIZE) }
 }
 
 /// Column's name is max 30 bytes long for now
@@ -60,10 +60,8 @@ pub struct Column {
 ///     - column_type: 1 byte
 /// Total: 32 bytes
 impl Storable for Column {
-    const SIZE: Option<usize> = Some(32);
-
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != Self::SIZE.unwrap() { return None; }
+        if bytes.len() != Self::get_size().unwrap() { return None; }
 
         let column_type = types::ColumnType::from_bytes(&[bytes[31]]).unwrap();
         let name = utils::string_from_bytes(&bytes[0..31]).unwrap();
@@ -78,8 +76,10 @@ impl Storable for Column {
         let mut ret:Vec<u8> = vec![];
         ret.append(&mut utils::string_to_bytes(&self.name, 31).unwrap());
         ret.append(&mut self.column_type.to_bytes().unwrap());
-        assert_eq!(ret.len(), 32);
+        assert_eq!(ret.len(), Self::get_size().unwrap());
 
         Some(ret)
     }
+
+    fn get_size() -> Option<usize> { Some(32) }
 }

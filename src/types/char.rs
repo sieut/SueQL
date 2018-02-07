@@ -9,10 +9,8 @@ impl Char {
 }
 
 impl Storable for Char {
-    const SIZE: Option<usize> = Some(1);
-
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() != Self::SIZE.unwrap() {
+        if bytes.len() != Self::get_size().unwrap() {
             None
         }
         else {
@@ -23,6 +21,8 @@ impl Storable for Char {
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(vec![self.0])
     }
+
+    fn get_size() -> Option<usize> { Some(1) }
 }
 
 impl Eq for Char {}
