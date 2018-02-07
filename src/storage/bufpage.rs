@@ -57,7 +57,7 @@ where T: Storable {
 
 impl<'a, T> Iterator for Iter<'a, T>
 where T: Storable {
-    type Item = T::Item;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index == self.buf_page.data.len() / T::get_size() {
@@ -101,7 +101,7 @@ where T: Storable {
 
 impl<'a, T> Iterator for IterMut<'a, T>
 where T: Storable {
-    type Item = T::Item;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.buf_page.data.len() / T::get_size() {

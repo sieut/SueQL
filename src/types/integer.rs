@@ -13,10 +13,9 @@ impl Integer {
 }
 
 impl Storable for Integer {
-    type Item = Integer;
     const SIZE: Option<usize> = Some(4);
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != Self::SIZE.unwrap() {
             None
         }

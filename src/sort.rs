@@ -214,7 +214,7 @@ where T: Storable {
 
 impl<T> Iterator for RunIterator<T>
 where T: Storable {
-    type Item = T::Item;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.consumed == self.len {

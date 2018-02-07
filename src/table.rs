@@ -13,10 +13,9 @@ pub struct Table {
 ///     - columns: rest of page
 /// Total: 4096 bytes (a page)
 impl Storable for Table {
-    type Item = Table;
     const SIZE: Option<usize> = Some(PAGE_SIZE);
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != Self::SIZE.unwrap() { return None; }
 
         let name = utils::string_from_bytes(&bytes[0..32]).unwrap();
@@ -61,10 +60,9 @@ pub struct Column {
 ///     - column_type: 1 byte
 /// Total: 32 bytes
 impl Storable for Column {
-    type Item = Column;
     const SIZE: Option<usize> = Some(32);
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != Self::SIZE.unwrap() { return None; }
 
         let column_type = types::ColumnType::from_bytes(&[bytes[31]]).unwrap();

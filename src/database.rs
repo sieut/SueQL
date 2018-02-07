@@ -24,10 +24,9 @@ pub struct Database {
 ///         - file_name: 32 bytes (same as table_name)
 /// Total: 4096 bytes (a page)
 impl Storable for Database {
-    type Item = Database;
     const SIZE: Option<usize> = Some(PAGE_SIZE);
 
-    fn from_bytes(bytes: &[u8]) -> Option<Self::Item> {
+    fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != Self::SIZE.unwrap() {
             return None;
         }
