@@ -1,6 +1,6 @@
 extern crate byteorder;
 
-use storage::{Storable, PAGE_SIZE};
+use storage::{Storable, bufpage, PAGE_SIZE};
 use types;
 use utils;
 use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
@@ -8,9 +8,19 @@ use std::io::Cursor;
 
 /// Table's name is max 31 bytes long, aligning with Column's size, for now
 pub struct Table {
-    row_count: u64,
-    name: String,
-    columns: Vec<Column>
+    pub row_count: u64,
+    pub name: String,
+    pub columns: Vec<Column>,
+    disk_ptr: String,
+}
+
+impl Table {
+    pub fn new(buffer: &bufpage::BufPage, disk_ptr: &String) -> Option<Table> {
+        match Table::from_bytes(buffer.data()) {
+            Some(temp_table) => Some(Table { disk_ptr: disk_ptr.clone(), ..temp_table }),
+            None => None
+        }
+    }
 }
 
 /// Storage format for Table:
@@ -36,7 +46,7 @@ impl Storable for Table {
             else { break; }
         }
 
-        Some(Table { row_count: row_count, name: name, columns: columns })
+        Some(Table { row_count: row_count, name: name, columns: columns, disk_ptr: String::from("") })
     }
 
     // TODO implement
