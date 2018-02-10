@@ -15,7 +15,7 @@ impl BufPage {
 
     pub fn push<T>(&mut self, value: &T)
     where T: Storable {
-        assert!(self.data.len() + T::get_size().unwrap() < PAGE_SIZE);
+        assert!(self.data.len() + T::get_size().unwrap() <= PAGE_SIZE);
         self.data.append(&mut value.to_bytes().unwrap());
     }
 
