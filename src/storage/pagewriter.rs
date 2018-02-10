@@ -38,6 +38,12 @@ impl PageWriter {
 
     // TODO update page offset
     pub fn store(&mut self, page: &bufpage::BufPage) -> Result<()> {
-        self.file.write_all(page.data().as_slice())
+        match self.file.write_all(page.data().as_slice()) {
+            Ok(ok) => {
+                self.page_offset += 1;
+                Ok(ok)
+            }
+            Err(err) => Err(err)
+        }
     }
 }
