@@ -1,17 +1,20 @@
 extern crate byteorder;
 
 pub use self::column::Column;
+pub use self::tuple::TupleDesc;
 use types;
 use utils;
 use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use std::io::Cursor;
 
 mod column;
+mod tuple;
+
 /// Table's name is max 31 bytes long, aligning with Column's size, for now
 pub struct Table {
     pub row_count: u64,
     pub name: String,
-    pub columns: Vec<Column>,
+    tuple_desc: TupleDesc,
     disk_ptr: String,
 }
 
@@ -47,7 +50,12 @@ impl Storable for Table {
             else { break; }
         }
 
-        Some(Table { row_count: row_count, name: name, columns: columns, disk_ptr: String::from("") })
+        Some(Table {
+            row_count: row_count,
+            name: name,
+            tuple_desc: TupleDesc::new(&columns),
+            disk_ptr: String::from("")
+        })
     }
 
     // TODO implement
@@ -57,7 +65,7 @@ impl Storable for Table {
         ret.write_u64::<LittleEndian>(self.row_count).unwrap();
         ret.append(&mut utils::string_to_bytes(&self.name, 32).unwrap());
 
-        for col in self.columns.iter() {
+        for col in self.tuple_desc.columns.iter() {
             ret.append(&mut col.to_bytes().unwrap());
         }
 
