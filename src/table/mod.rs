@@ -1,11 +1,12 @@
 extern crate byteorder;
 
-use storage::{Storable, bufpage, PAGE_SIZE};
+pub use self::column::Column;
 use types;
 use utils;
 use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
 use std::io::Cursor;
 
+mod column;
 /// Table's name is max 31 bytes long, aligning with Column's size, for now
 pub struct Table {
     pub row_count: u64,
