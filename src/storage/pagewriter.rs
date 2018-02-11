@@ -34,3 +34,74 @@ impl PageWriter {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use storage::{PageReader, PageWriter, PAGE_SIZE};
+    use storage::bufpage::BufPage;
+    use std::fs::remove_file;
+
+    #[test]
+    fn test_write_new_file() {
+        {
+            let mut writer = PageWriter::new(String::from("writer_test_write_new_file"), 0).unwrap();
+            let buffer = BufPage::new(&[5; PAGE_SIZE], PAGE_SIZE);
+
+            writer.store(&buffer).unwrap();
+            writer.store(&buffer).unwrap();
+        }
+        {
+            let mut reader = PageReader::new(String::from("writer_test_write_new_file"), 0).unwrap();
+            let mut buffer;
+
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 5); }
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 5); }
+        }
+
+        remove_file("writer_test_write_new_file").unwrap();
+    }
+
+    #[test]
+    fn test_overwrite() {
+        {
+            let mut writer = PageWriter::new(String::from("writer_test_overwrite"), 0).unwrap();
+            let buffer = BufPage::new(&[5; PAGE_SIZE], PAGE_SIZE);
+
+            writer.store(&buffer).unwrap();
+            writer.store(&buffer).unwrap();
+            writer.store(&buffer).unwrap();
+            writer.store(&buffer).unwrap();
+        }
+        {
+            let mut writer = PageWriter::new(String::from("writer_test_overwrite"), 1).unwrap();
+            let buffer = BufPage::new(&[1; PAGE_SIZE], PAGE_SIZE);
+
+            writer.store(&buffer).unwrap();
+            writer.store(&buffer).unwrap();
+        }
+        // After these 2 blocks, the file should look like
+        //      5's: 1 page
+        //      1's: 2 pages
+        //      5's: 1 page
+        {
+            let mut reader = PageReader::new(String::from("writer_test_overwrite"), 0).unwrap();
+            let mut buffer;
+
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 5); }
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 1); }
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 1); }
+            buffer = reader.consume_page();
+            for byte in buffer.data().iter() { assert_eq!(*byte, 5); }
+
+            buffer = reader.consume_page();
+            assert!(buffer.data().len() == 0);
+        }
+
+        remove_file("writer_test_overwrite").unwrap();
+    }
+}
