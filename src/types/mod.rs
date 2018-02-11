@@ -12,6 +12,22 @@ pub enum ColumnType {
     Int,
 }
 
+impl ColumnType {
+    pub fn data_size(&self) -> usize {
+        match self {
+            &ColumnType::Int => integer::Integer::get_size().unwrap(),
+            &ColumnType::Char => char::Char::get_size().unwrap(),
+        }
+    }
+
+    pub fn is_fixed_size(&self) -> bool {
+        match self {
+            &ColumnType::Int => true,
+            &ColumnType::Char => true,
+        }
+    }
+}
+
 impl Storable for ColumnType {
     fn from_bytes(bytes: &[u8]) -> Option<Self> {
         if bytes.len() != 1 {
