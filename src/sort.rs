@@ -36,7 +36,7 @@ pub fn sort(_file: String) -> Result<bool, String> {
 /// Replacement sort basically
 fn first_pass(_file: String) -> Result<Vec<Run>, String> {
     let mut f_reader = PageReader::new(_file, 0).unwrap();
-    let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0, true).unwrap();
+    let mut buffer_writer = PageWriter::new(String::from(FILE_PREFIX.to_owned() + "1"), 0).unwrap();
 
     let mut for_next_run: Vec<bufpage::BufPage> = vec![bufpage::BufPage::new(&[0; PAGE_SIZE], 0)];
     let mut output_buf = bufpage::BufPage::new(&[0; PAGE_SIZE], 0);
@@ -107,7 +107,7 @@ fn merge(runs: &Vec<Run>, pass: u32) -> Result<Vec<Run>, String> {
     let last_pass_fname:String = String::from(FILE_PREFIX) + &(pass-1).to_string();
     let cur_pass_fname:String = String::from(FILE_PREFIX) + &(pass).to_string();
 
-    let mut buffer_writer = PageWriter::new(cur_pass_fname, 0, true).unwrap();
+    let mut buffer_writer = PageWriter::new(cur_pass_fname, 0).unwrap();
     let mut output_buf = bufpage::BufPage::new(&[0; PAGE_SIZE], 0);
 
     let mut ret = vec![];

@@ -1,5 +1,5 @@
 use storage::{Storable, PAGE_SIZE, bufpage};
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Write, Seek, SeekFrom, Result};
 
 pub struct PageWriter {
@@ -9,30 +9,17 @@ pub struct PageWriter {
 }
 
 impl PageWriter {
-    pub fn new(file_name: String, page_offset: usize, new_file: bool) -> Option<PageWriter> {
-        // TODO code repetition
-        if new_file {
-            assert!(page_offset == 0);
-            match File::create(file_name.clone()) {
-                Ok(file) => Some(PageWriter {
-                        file_name: file_name.clone(),
-                        page_offset: page_offset,
-                        file: file
-                    }),
-                Err(_) => None
+    pub fn new(file_name: String, page_offset: usize) -> Option<PageWriter> {
+        match OpenOptions::new().create(true).write(true).read(true).open(file_name.clone()) {
+            Ok(mut file) => {
+                file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64)).unwrap();
+                Some(PageWriter {
+                    file_name: file_name.clone(),
+                    page_offset: page_offset,
+                    file: file
+                })
             }
-        } else {
-            match File::open(file_name.clone()) {
-                Ok(mut file) => {
-                    file.seek(SeekFrom::Start((page_offset * PAGE_SIZE) as u64)).unwrap();
-                    Some(PageWriter {
-                        file_name: file_name.clone(),
-                        page_offset: page_offset,
-                        file: file
-                    })
-                },
-                Err(_) => None
-            }
+            Err(err) => None
         }
     }
 
