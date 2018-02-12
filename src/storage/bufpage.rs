@@ -19,6 +19,11 @@ impl BufPage {
         self.data.append(&mut value.to_bytes().unwrap());
     }
 
+    pub fn push_bytes(&mut self, bytes: &Vec<u8>) {
+        assert!(self.data.len() + bytes.len() <= PAGE_SIZE);
+        self.data.append(&mut bytes.clone());
+    }
+
     pub fn clear(&mut self) {
         self.data.clear();
     }

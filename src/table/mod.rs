@@ -2,6 +2,7 @@ extern crate byteorder;
 
 pub use self::column::Column;
 pub use self::tuple::TupleDesc;
+use storage::{Storable, PageReader, PageWriter, bufpage, PAGE_SIZE};
 use types;
 use utils;
 use self::byteorder::{ReadBytesExt, WriteBytesExt, LittleEndian};
@@ -23,6 +24,31 @@ impl Table {
         match Table::from_bytes(buffer.data()) {
             Some(temp_table) => Some(Table { disk_ptr: disk_ptr.clone(), ..temp_table }),
             None => None
+        }
+    }
+
+    pub fn insert_row(&self, tuple: &Vec<u8>) {
+        assert_eq!(tuple.len(), self.tuple_desc.tuple_size);
+        // Current size of the table in bytes
+        let table_size = (self.row_count as usize) * self.tuple_desc.tuple_size;
+        // Offset, in a page, of the new row
+        let index_offset =  table_size % PAGE_SIZE;
+        // Page offset, in data file, of the new row
+        //      first page is the table info
+        let page_offset = if index_offset == 0 { table_size / PAGE_SIZE + 2 } else { table_size / PAGE_SIZE + 1 };
+
+        let mut page: bufpage::BufPage;
+        // Read the last page and append the new tuple
+        {
+            let mut page_rdr = PageReader::new(self.disk_ptr.clone(), page_offset).unwrap();
+            page = page_rdr.consume_page();
+            assert!(page.data().len() + self.tuple_desc.tuple_size <= PAGE_SIZE);
+            page.push_bytes(&tuple);
+        }
+        // Write the last page to disk
+        {
+            let mut page_wrt = PageWriter::new(self.disk_ptr.clone(), page_offset).unwrap();
+            page_wrt.store(&page).unwrap();
         }
     }
 }
