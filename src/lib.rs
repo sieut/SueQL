@@ -3,7 +3,7 @@
 pub mod database;
 pub mod table;
 mod storage;
-mod sql;
+// mod sql;
 mod sort;
 mod types;
 mod utils;
