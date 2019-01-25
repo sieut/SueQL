@@ -31,11 +31,13 @@ fn test_bufmgr_store() {
     }
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(2, 0)).unwrap();
-    let result_buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
+
+    let mut buf_mgr = BufMgr::new();
+    let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
     teardown_bufmgr(data_file);
 
-    assert_eq!(result_buf_page.buf[0], 1);
-    assert_eq!(result_buf_page.buf[1], 1);
+    assert_eq!(buf_page.buf[0], 1);
+    assert_eq!(buf_page.buf[1], 1);
 }
 
 fn setup_bufmgr(data_file: &str) {
