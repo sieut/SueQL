@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
-use std::io::{Seek, Read};
+use std::io::{Seek, Read, Write};
 use storage;
 use storage::bufkey::BufKey;
 use storage::bufpage::BufPage;
@@ -28,26 +28,26 @@ impl BufMgr {
         Some(self.buf_table.get_mut(key).unwrap())
     }
 
-    pub fn store_buf(&self, key: &BufKey) -> Option<()> {
+    pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
         match self.buf_table.get(key) {
-            Some(buf) => {
+            Some(buf_page) => {
+                let mut file = OpenOptions::new().write(true).open(key.to_filename())?;
+                file.seek(io::SeekFrom::Start(key.byte_offset()))?;
+                file.write_all(buf_page.buf.as_slice())?;
+                Ok(())
             },
-            None => None
+            None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
         }
     }
 
     fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
-        let mut file = self.open_file(key)?;
+        let mut file = File::open(key.to_filename())?;
+        file.seek(io::SeekFrom::Start(key.byte_offset()))?;
+
         let mut buf = [0; storage::PAGE_SIZE as usize];
         file.read_exact(&mut buf)?;
 
         self.buf_table.insert(key.clone(), BufPage::new(&buf));
         Ok(())
-    }
-
-    fn open_file(&self, key: &BufKey) -> Result<File, io::Error> {
-        let mut file = File::open(key.to_filename())?;
-        file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-        Ok(file)
     }
 }
