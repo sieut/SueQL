@@ -1,6 +1,5 @@
-pub const PAGE_SIZE:usize = 4096;
+pub const PAGE_SIZE:u64 = 4096;
 
-pub use self::storable::Storable;
-
+pub mod bufkey;
+pub mod bufmgr;
 pub mod bufpage;
-mod storable;
