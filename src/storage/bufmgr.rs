@@ -47,7 +47,7 @@ impl BufMgr {
         let mut buf = [0; storage::PAGE_SIZE as usize];
         file.read_exact(&mut buf)?;
 
-        self.buf_table.insert(key.clone(), BufPage::new(&buf));
+        self.buf_table.insert(key.clone(), BufPage::load_from(&buf)?);
         Ok(())
     }
 }

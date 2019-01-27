@@ -1,4 +1,4 @@
-pub const PAGE_SIZE:u64 = 4096;
+pub const PAGE_SIZE:u32 = 4096;
 
 pub mod bufkey;
 pub mod bufmgr;
