@@ -3,8 +3,8 @@ use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{Seek, Read, Write};
 use storage;
-use storage::bufkey::BufKey;
-use storage::bufpage::BufPage;
+use storage::buf_key::BufKey;
+use storage::buf_page::BufPage;
 
 pub struct BufMgr {
     buf_table: HashMap<BufKey, BufPage>,
