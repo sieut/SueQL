@@ -17,6 +17,6 @@ impl BufKey {
     }
 
     pub fn byte_offset(&self) -> u64 {
-        self.offset * PAGE_SIZE
+        self.offset * (PAGE_SIZE as u64)
     }
 }
