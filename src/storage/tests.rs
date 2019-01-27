@@ -1,8 +1,8 @@
 use std::fs::{File, remove_file};
 use std::io::{Write};
 use storage::PAGE_SIZE;
-use storage::bufkey::BufKey;
-use storage::bufmgr::BufMgr;
+use storage::buf_key::BufKey;
+use storage::buf_mgr::BufMgr;
 
 #[test]
 fn test_bufmgr_get() {
