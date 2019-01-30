@@ -13,8 +13,9 @@ fn test_bufmgr_get() {
     let buf_page = buf_mgr.get_buf(&BufKey::new(1, 0)).unwrap();
     teardown_bufmgr(data_file);
 
-    assert_eq!(buf_page.buf.len() as u64, PAGE_SIZE);
-    for byte in buf_page.buf.iter() { assert_eq!(*byte, 0); }
+    let read_lock = buf_page.buf.read().unwrap();
+    assert_eq!(read_lock.len() as u32, PAGE_SIZE);
+    for byte in read_lock.iter() { assert_eq!(*byte, 0); }
 }
 
 #[test]
@@ -26,8 +27,9 @@ fn test_bufmgr_store() {
     {
         let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
         // Change values in buf_page
-        buf_page.buf[0] = 1;
-        buf_page.buf[1] = 1;
+        let mut write_lock = buf_page.buf.write().unwrap();
+        write_lock[0] = 1;
+        write_lock[1] = 1;
     }
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(2, 0)).unwrap();
@@ -36,8 +38,9 @@ fn test_bufmgr_store() {
     let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
     teardown_bufmgr(data_file);
 
-    assert_eq!(buf_page.buf[0], 1);
-    assert_eq!(buf_page.buf[1], 1);
+    let read_lock = buf_page.buf.read().unwrap();
+    assert_eq!(read_lock[0], 1);
+    assert_eq!(read_lock[1], 1);
 }
 
 fn setup_bufmgr(data_file: &str) {
