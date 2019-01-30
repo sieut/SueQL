@@ -1,6 +1,7 @@
 extern crate byteorder;
 
 use std::io::Cursor;
+use std::sync::RwLock;
 use storage::{PAGE_SIZE};
 use self::byteorder::{LittleEndian, ReadBytesExt};
 
@@ -8,8 +9,7 @@ static HEADER_SIZE: usize = 8;
 
 // Page layout will be similar to Postgres' (http://www.interdb.jp/pg/pgsql01.html#_1.3.)
 pub struct BufPage {
-    // TODO update tests.rs and remove pub
-    pub buf: Vec<u8>,
+    pub buf: RwLock<Vec<u8>>,
     // Values in page's header
     upper_ptr: PagePtr,
     lower_ptr: PagePtr
@@ -24,7 +24,7 @@ impl BufPage {
         let lower_ptr = reader.read_u32::<LittleEndian>()?;
 
         Ok(BufPage {
-            buf: buffer.to_vec(),
+            buf: RwLock::new(buffer.to_vec()),
             upper_ptr,
             lower_ptr
         })
