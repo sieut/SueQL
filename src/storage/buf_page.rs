@@ -43,6 +43,12 @@ impl BufPage {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid buf_offset"));
         }
 
+    pub fn get_tuple_data_range(&self, tuple_ptr: &TuplePtr)
+            -> Result<std::ops::Range<usize>, std::io::Error> {
+        match self.is_valid_tuple_ptr(tuple_ptr) {
+            Some(e) => return Err(e),
+            None => {},
+        }
         let read_lock = self.buf.read().unwrap();
         let mut reader = Cursor::new(
             &read_lock[(tuple_ptr.buf_offset() - 8) as usize
@@ -62,7 +68,16 @@ impl BufPage {
         Ok(start as usize..end as usize)
     }
 
-    fn is_valid_buf_offset(&self, buf_offset: PagePtr) -> bool {
-        buf_offset <= self.lower_ptr - 8
+    fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr) -> Option<std::io::Error> {
+        if self.buf_key != tuple_ptr.buf_key() {
+            Some(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid buf_key"))
+        }
+        else if tuple_ptr.buf_offset() <= self.lower_ptr - 8 {
+            Some(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid buf_offset"))
+        }
+        else {
+            None
+        }
+    }
     }
 }
