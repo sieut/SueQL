@@ -31,9 +31,10 @@ impl BufMgr {
     pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
         match self.buf_table.get(key) {
             Some(buf_page) => {
+                let read_lock = buf_page.buf.read().unwrap();
                 let mut file = OpenOptions::new().write(true).open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-                file.write_all(buf_page.buf.as_slice())?;
+                file.write_all(&*read_lock.as_slice())?;
                 Ok(())
             },
             None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
@@ -47,7 +48,7 @@ impl BufMgr {
         let mut buf = [0; storage::PAGE_SIZE as usize];
         file.read_exact(&mut buf)?;
 
-        self.buf_table.insert(key.clone(), BufPage::load_from(&buf)?);
+        self.buf_table.insert(key.clone(), BufPage::load_from(&buf, key)?);
         Ok(())
     }
 }
