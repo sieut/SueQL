@@ -77,6 +77,12 @@ impl BufPage {
                         ..(LOWER_PTR_OFFSET + 4) as usize],
                     self.lower_ptr);
 
+                self.upper_ptr -= tuple_data.len() as u32;
+                LittleEndian::write_u32(
+                    &mut write_lock[UPPER_PTR_OFFSET as usize
+                        ..(UPPER_PTR_OFFSET + 4) as usize],
+                    self.upper_ptr);
+
                 new_ptr
             }
         };
@@ -84,12 +90,6 @@ impl BufPage {
         let mut write_lock = self.buf.write().unwrap();
         write_lock[buf_offset as usize..buf_offset as usize + tuple_data.len()]
             .clone_from_slice(tuple_data);
-
-        self.upper_ptr -= tuple_data.len() as u32;
-        LittleEndian::write_u32(
-            &mut write_lock[UPPER_PTR_OFFSET as usize
-                ..(UPPER_PTR_OFFSET + 4) as usize],
-            self.upper_ptr);
 
         Ok(buf_offset)
     }
