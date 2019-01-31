@@ -4,7 +4,7 @@ use self::byteorder::{LittleEndian, ReadBytesExt};
 
 use std::io::Cursor;
 use storage::PAGE_SIZE;
-use storage::buf_page::{BufPage, PagePtr};
+use storage::buf_page::BufPage;
 use storage::buf_key::BufKey;
 use tuple::tuple_ptr::TuplePtr;
 
@@ -51,15 +51,15 @@ fn test_get_tuple_range() {
     let buf_page = BufPage::load_from(
         &buffer, &BufKey::new(0, 0)).unwrap();
 
-    let invalid_tuple_ptr = TuplePtr::new(0, BufKey::new(0, 1), 8);
+    let invalid_tuple_ptr = TuplePtr::new(BufKey::new(0, 1), 8);
     assert!(buf_page.get_tuple_data_range(&invalid_tuple_ptr).is_err());
 
-    let tuple_ptr_1 = TuplePtr::new(0, BufKey::new(0, 0), 8);
+    let tuple_ptr_1 = TuplePtr::new(BufKey::new(0, 0), 8);
     let tuple_range_1 = buf_page.get_tuple_data_range(&tuple_ptr_1).unwrap();
     assert_eq!(tuple_range_1.start as u32, PAGE_SIZE - 8);
     assert_eq!(tuple_range_1.end as u32, PAGE_SIZE);
 
-    let tuple_ptr_2 = TuplePtr::new(0, BufKey::new(0, 0), 12);
+    let tuple_ptr_2 = TuplePtr::new(BufKey::new(0, 0), 12);
     let tuple_range_2 = buf_page.get_tuple_data_range(&tuple_ptr_2).unwrap();
     assert_eq!(tuple_range_2.start as u32, PAGE_SIZE - 16);
     assert_eq!(tuple_range_2.end as u32, PAGE_SIZE - 8);
