@@ -14,7 +14,7 @@ fn test_bufmgr_get() {
     teardown_bufmgr(data_file);
 
     let read_lock = buf_page.buf.read().unwrap();
-    assert_eq!(read_lock.len() as u32, PAGE_SIZE);
+    assert_eq!(read_lock.len(), PAGE_SIZE);
     for byte in read_lock.iter() { assert_eq!(*byte, 0); }
 }
 

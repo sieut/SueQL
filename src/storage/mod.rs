@@ -1,4 +1,4 @@
-pub const PAGE_SIZE:u32 = 4096;
+pub const PAGE_SIZE: usize = 4096;
 
 pub mod buf_key;
 pub mod buf_mgr;

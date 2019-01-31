@@ -23,14 +23,14 @@ pub struct BufPage {
     buf_key: BufKey,
 }
 
-pub type PagePtr = u32;
+pub type PagePtr = usize;
 
 impl BufPage {
     pub fn load_from(buffer: &[u8; PAGE_SIZE as usize], buf_key: &BufKey)
             -> Result<BufPage, std::io::Error> {
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
-        let upper_ptr = reader.read_u32::<LittleEndian>()?;
-        let lower_ptr = reader.read_u32::<LittleEndian>()?;
+        let upper_ptr = reader.read_u32::<LittleEndian>()? as usize;
+        let lower_ptr = reader.read_u32::<LittleEndian>()? as usize;
 
         Ok(BufPage {
             buf: RwLock::new(buffer.to_vec()),
@@ -46,7 +46,7 @@ impl BufPage {
             -> Result<PagePtr, std::io::Error> {
         let ret_offset;
 
-        let buf_offset = match tuple_ptr {
+        let page_ptr: PagePtr = match tuple_ptr {
             Some(ptr) => {
                 self.is_valid_tuple_ptr(ptr)?;
                 // TODO handle this case
@@ -59,42 +59,44 @@ impl BufPage {
 
                 let read_lock = self.buf.read().unwrap();
                 let mut reader = Cursor::new(
-                    &read_lock[ptr.buf_offset() as usize
-                        ..(ptr.buf_offset() + 4) as usize]);
-                reader.read_u32::<LittleEndian>()?
+                    &read_lock[BufPage::offset_to_ptr(ptr.buf_offset())
+                        ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))]);
+                reader.read_u32::<LittleEndian>()? as usize
             },
             None => {
                 // TODO Handle this case
-                if (self.available_data_space() as usize) < tuple_data.len() {
+                if self.available_data_space() < tuple_data.len() {
                     panic!("Not enough space in page");
                 }
 
                 let mut write_lock = self.buf.write().unwrap();
-                let new_ptr = self.upper_ptr - tuple_data.len() as u32;
+
+                ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
+
+                let new_ptr = self.upper_ptr - tuple_data.len();
                 LittleEndian::write_u32(
-                    &mut write_lock[self.lower_ptr as usize
-                        ..(self.lower_ptr + 4) as usize],
-                    new_ptr);
-                ret_offset = self.lower_ptr;
+                    &mut write_lock[self.lower_ptr
+                        ..(self.lower_ptr + 4)],
+                    new_ptr as u32);
 
                 self.lower_ptr += 4;
                 LittleEndian::write_u32(
-                    &mut write_lock[LOWER_PTR_OFFSET as usize
-                        ..(LOWER_PTR_OFFSET + 4) as usize],
-                    self.lower_ptr);
+                    &mut write_lock[LOWER_PTR_OFFSET
+                        ..(LOWER_PTR_OFFSET + 4)],
+                    self.lower_ptr as u32);
 
-                self.upper_ptr -= tuple_data.len() as u32;
+                self.upper_ptr -= tuple_data.len();
                 LittleEndian::write_u32(
-                    &mut write_lock[UPPER_PTR_OFFSET as usize
-                        ..(UPPER_PTR_OFFSET + 4) as usize],
-                    self.upper_ptr);
+                    &mut write_lock[UPPER_PTR_OFFSET
+                        ..(UPPER_PTR_OFFSET + 4)],
+                    self.upper_ptr as u32);
 
                 new_ptr
             }
         };
 
         let mut write_lock = self.buf.write().unwrap();
-        write_lock[buf_offset as usize..buf_offset as usize + tuple_data.len()]
+        write_lock[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
 
         Ok(ret_offset)
@@ -104,28 +106,29 @@ impl BufPage {
             -> Result<std::ops::Range<usize>, std::io::Error> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
         let read_lock = self.buf.read().unwrap();
+
         let mut reader = Cursor::new(
-            &read_lock[(tuple_ptr.buf_offset() - 4) as usize
-            ..(tuple_ptr.buf_offset() + 4) as usize]);
+            &read_lock[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
+            ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)]);
+        let start = reader.read_u32::<LittleEndian>()? as usize;
 
-        let prev_u32 = reader.read_u32::<LittleEndian>()?;
-        let end =
-            if tuple_ptr.buf_offset() as usize == HEADER_SIZE {
-                PAGE_SIZE
-            }
-            else {
-                prev_u32
-            };
-        let start = reader.read_u32::<LittleEndian>()?;
+        let end = if tuple_ptr.buf_offset() > 0 {
+            let mut reader = Cursor::new(
+                &read_lock[BufPage::offset_to_ptr(tuple_ptr.buf_offset() - 1)
+                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset())]);
+            reader.read_u32::<LittleEndian>()? as usize
+        }
+        else {
+            PAGE_SIZE
+        };
 
-        Ok(start as usize..end as usize)
+        Ok(start..end)
     }
 
     pub fn iter(&self) -> Iter {
         Iter {
             buf_page: self,
-            tuple_ptr: TuplePtr::new(self.buf_key.clone(),
-                                     HEADER_SIZE as u32),
+            tuple_ptr: TuplePtr::new(self.buf_key.clone(), 0),
         }
     }
 
@@ -137,13 +140,28 @@ impl BufPage {
         self.lower_ptr
     }
 
+    fn offset_to_ptr(buf_offset: usize) -> PagePtr {
+        HEADER_SIZE + buf_offset * 4
+    }
+
+    fn ptr_to_offset(ptr: PagePtr) -> usize {
+        (ptr - HEADER_SIZE) / 4
+    }
+
+    fn tuple_count(&self) -> usize {
+        (self.lower_ptr - HEADER_SIZE) / 4
+    }
+
     fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr)
             -> Result<(), std::io::Error> {
         if self.buf_key != tuple_ptr.buf_key() {
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid buf_key"))
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput,
+                                    "Invalid buf_key"))
         }
-        else if tuple_ptr.buf_offset() <= self.lower_ptr - 8 {
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid buf_offset"))
+        else if tuple_ptr.buf_offset() >= self.tuple_count() {
+            Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("Invalid buf_offset {}", tuple_ptr.buf_offset())))
         }
         else {
             Ok(())
@@ -156,9 +174,9 @@ impl BufPage {
         Ok(current_tuple_range.end - current_tuple_range.start)
     }
 
-    fn available_data_space(&self) -> u32 {
-        // -8 because we also have to make space for a new ptr
-        self.upper_ptr - self.lower_ptr - 8
+    fn available_data_space(&self) -> usize {
+        // - 4 because we also have to make space for a new ptr
+        self.upper_ptr - self.lower_ptr - 4
     }
 }
 
