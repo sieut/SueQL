@@ -1,13 +1,15 @@
 use storage::buf_key::BufKey;
 use storage::buf_page::PagePtr;
 
+/// Struct that specifies location of tuple in a buffer
+///     * buf_offset: starting from 0
 pub struct TuplePtr {
     buf_key: BufKey,
-    buf_offset: PagePtr
+    buf_offset: usize
 }
 
 impl TuplePtr {
-    pub fn new(buf_key: BufKey, buf_offset: PagePtr) -> TuplePtr {
+    pub fn new(buf_key: BufKey, buf_offset: usize) -> TuplePtr {
         TuplePtr { buf_key, buf_offset }
     }
 
@@ -20,6 +22,6 @@ impl TuplePtr {
     }
 
     pub fn inc_buf_offset(&mut self) {
-        self.buf_offset += 4;
+        self.buf_offset += 1;
     }
 }
