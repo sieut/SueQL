@@ -5,7 +5,7 @@ pub enum DataType {
 impl DataType {
     pub fn size(&self) -> Option<usize> {
         match self {
-            &DataType::Char => Some(8),
+            &DataType::Char => Some(1),
         }
     }
 }
