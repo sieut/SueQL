@@ -18,4 +18,8 @@ impl TuplePtr {
     pub fn buf_offset(&self) -> PagePtr {
         self.buf_offset
     }
+
+    pub fn inc_buf_offset(&mut self) {
+        self.buf_offset += 4;
+    }
 }

@@ -3,6 +3,7 @@ use self::byteorder::ByteOrder;
 use self::byteorder::{LittleEndian, ReadBytesExt};
 
 use std::io::Cursor;
+use std::iter::Iterator;
 use std::sync::RwLock;
 use storage::{PAGE_SIZE};
 use storage::buf_key::BufKey;
@@ -120,6 +121,22 @@ impl BufPage {
         Ok(start as usize..end as usize)
     }
 
+    pub fn iter(&self) -> Iter {
+        Iter {
+            buf_page: self,
+            tuple_ptr: TuplePtr::new(self.buf_key.clone(),
+                                     HEADER_SIZE as u32),
+        }
+    }
+
+    pub fn upper_ptr(&self) -> PagePtr {
+        self.upper_ptr
+    }
+
+    pub fn lower_ptr(&self) -> PagePtr {
+        self.lower_ptr
+    }
+
     fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr)
             -> Result<(), std::io::Error> {
         if self.buf_key != tuple_ptr.buf_key() {
@@ -142,5 +159,24 @@ impl BufPage {
     fn available_data_space(&self) -> u32 {
         // -8 because we also have to make space for a new ptr
         self.upper_ptr - self.lower_ptr - 8
+    }
+}
+
+pub struct Iter<'a> {
+    buf_page: &'a BufPage,
+    tuple_ptr: TuplePtr,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = std::ops::Range<usize>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.buf_page.get_tuple_data_range(&self.tuple_ptr) {
+            Ok(range) => {
+                self.tuple_ptr.inc_buf_offset();
+                Some(range)
+            },
+            Err(_) => None
+        }
     }
 }
