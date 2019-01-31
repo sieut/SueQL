@@ -64,3 +64,25 @@ fn test_get_tuple_range() {
     assert_eq!(tuple_range_2.start as u32, PAGE_SIZE - 16);
     assert_eq!(tuple_range_2.end as u32, PAGE_SIZE - 8);
 }
+
+#[test]
+fn test_buf_page_iter() {
+    let mut buffer: [u8; PAGE_SIZE as usize] = [0; PAGE_SIZE as usize];
+    // upper_ptr
+    LittleEndian::write_u32(&mut buffer[0..4], PAGE_SIZE - 16);
+    // lower_ptr
+    LittleEndian::write_u32(&mut buffer[4..8], 12);
+    // tuple_ptr 1
+    LittleEndian::write_u32(&mut buffer[8..12], PAGE_SIZE - 8);
+    // tuple_ptr 2
+    LittleEndian::write_u32(&mut buffer[12..16], PAGE_SIZE - 16);
+
+    let buf_page = BufPage::load_from(
+        &buffer, &BufKey::new(0, 0)).unwrap();
+
+    let mut iter = buf_page.iter();
+    assert_eq!(iter.next().unwrap(),
+               ((PAGE_SIZE - 8) as usize..PAGE_SIZE as usize));
+    assert_eq!(iter.next().unwrap(),
+               ((PAGE_SIZE - 16) as usize..(PAGE_SIZE - 8) as usize));
+}
