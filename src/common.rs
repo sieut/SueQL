@@ -1,3 +1,3 @@
-pub type ID = u32;
+pub type ID = u64;
 
-static META_REL_ID: ID = 0;
+pub const META_REL_ID: ID = 0;
