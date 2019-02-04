@@ -1,7 +1,5 @@
-extern crate byteorder;
-use self::byteorder::{LittleEndian, ReadBytesExt};
-
 use std::io::Cursor;
+use byteorder::{LittleEndian, ReadBytesExt};
 use common::ID;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;

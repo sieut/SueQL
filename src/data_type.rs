@@ -1,5 +1,4 @@
-extern crate byteorder;
-use self::byteorder::{ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian};
 
 enum_from_primitive!{
 pub enum DataType {

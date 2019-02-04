@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+extern crate byteorder;
 #[macro_use]
 extern crate enum_primitive;
 

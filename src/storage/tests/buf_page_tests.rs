@@ -1,8 +1,6 @@
-extern crate byteorder;
-use self::byteorder::ByteOrder;
-use self::byteorder::{LittleEndian, ReadBytesExt};
-
 use std::io::Cursor;
+use byteorder::ByteOrder;
+use byteorder::{LittleEndian, ReadBytesExt};
 use storage::PAGE_SIZE;
 use storage::buf_page::BufPage;
 use storage::buf_key::BufKey;
