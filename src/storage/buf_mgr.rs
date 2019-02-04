@@ -17,15 +17,14 @@ impl BufMgr {
         }
     }
 
-    pub fn get_buf(&mut self, key: &BufKey) -> Option<&mut BufPage> {
+    pub fn get_buf(&mut self, key: &BufKey) -> Result<&mut BufPage, std::io::Error> {
         if !self.buf_table.contains_key(key) {
             let read_result = self.read_buf(key);
-            // TODO Handle error
             if read_result.is_err() {
-                return None;
+                return Err(read_result.unwrap_err());
             }
         }
-        Some(self.buf_table.get_mut(key).unwrap())
+        Ok(self.buf_table.get_mut(key).unwrap())
     }
 
     pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {

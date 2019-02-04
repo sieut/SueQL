@@ -148,7 +148,7 @@ impl BufPage {
         (ptr - HEADER_SIZE) / 4
     }
 
-    fn tuple_count(&self) -> usize {
+    pub fn tuple_count(&self) -> usize {
         (self.lower_ptr - HEADER_SIZE) / 4
     }
 
@@ -196,5 +196,9 @@ impl<'a> Iterator for Iter<'a> {
             },
             Err(_) => None
         }
+    }
+
+    fn count(self) -> usize {
+        self.buf_page.tuple_count()
     }
 }

@@ -1,9 +1,11 @@
 extern crate byteorder;
 use self::byteorder::{ByteOrder, LittleEndian};
 
+enum_from_primitive!{
 pub enum DataType {
     Char,
     Integer,
+}
 }
 
 impl DataType {
