@@ -1,7 +1,5 @@
-
 use std::io::Cursor;
 use std::iter::Iterator;
-use std::sync::RwLock;
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
 use storage::{PAGE_SIZE};
@@ -9,12 +7,13 @@ use storage::buf_key::BufKey;
 use tuple::tuple_ptr::TuplePtr;
 
 static HEADER_SIZE: usize = 8;
-static UPPER_PTR_OFFSET: PagePtr = 0;
-static LOWER_PTR_OFFSET: PagePtr = 4;
+const UPPER_PTR_RANGE: std::ops::Range<usize> = (0..4);
+const LOWER_PTR_RANGE: std::ops::Range<usize> = (4..8);
 
-// Page layout will be similar to Postgres' (http://www.interdb.jp/pg/pgsql01.html#_1.3.)
+// Page layout will be similar to Postgres'
+// http://www.interdb.jp/pg/pgsql01.html#_1.3.
 pub struct BufPage {
-    pub buf: RwLock<Vec<u8>>,
+    pub buf: Vec<u8>,
     // Values in page's header
     upper_ptr: PagePtr,
     lower_ptr: PagePtr,
@@ -32,7 +31,7 @@ impl BufPage {
         let lower_ptr = reader.read_u32::<LittleEndian>()? as usize;
 
         Ok(BufPage {
-            buf: RwLock::new(buffer.to_vec()),
+            buf: buffer.to_vec(),
             upper_ptr,
             lower_ptr,
             buf_key: buf_key.clone(),
@@ -56,9 +55,8 @@ impl BufPage {
 
                 ret_offset = ptr.buf_offset();
 
-                let read_lock = self.buf.read().unwrap();
                 let mut reader = Cursor::new(
-                    &read_lock[BufPage::offset_to_ptr(ptr.buf_offset())
+                    &self.buf[BufPage::offset_to_ptr(ptr.buf_offset())
                         ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))]);
                 reader.read_u32::<LittleEndian>()? as usize
             },
@@ -68,52 +66,45 @@ impl BufPage {
                     panic!("Not enough space in page");
                 }
 
-                let mut write_lock = self.buf.write().unwrap();
-
                 ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
 
                 let new_ptr = self.upper_ptr - tuple_data.len();
                 LittleEndian::write_u32(
-                    &mut write_lock[self.lower_ptr
+                    &mut self.buf[self.lower_ptr
                         ..(self.lower_ptr + 4)],
                     new_ptr as u32);
 
                 self.lower_ptr += 4;
                 LittleEndian::write_u32(
-                    &mut write_lock[LOWER_PTR_OFFSET
-                        ..(LOWER_PTR_OFFSET + 4)],
+                    &mut self.buf[LOWER_PTR_RANGE],
                     self.lower_ptr as u32);
 
                 self.upper_ptr -= tuple_data.len();
                 LittleEndian::write_u32(
-                    &mut write_lock[UPPER_PTR_OFFSET
-                        ..(UPPER_PTR_OFFSET + 4)],
+                    &mut self.buf[UPPER_PTR_RANGE],
                     self.upper_ptr as u32);
 
                 new_ptr
             }
         };
 
-        let mut write_lock = self.buf.write().unwrap();
-        write_lock[page_ptr..page_ptr + tuple_data.len()]
+        self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
 
         Ok(ret_offset)
     }
 
-    pub fn get_tuple_data_range(&self, tuple_ptr: &TuplePtr)
-            -> Result<std::ops::Range<usize>, std::io::Error> {
+    pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr)
+            -> Result<&[u8], std::io::Error> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
-        let read_lock = self.buf.read().unwrap();
-
         let mut reader = Cursor::new(
-            &read_lock[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
+            &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
             ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)]);
         let start = reader.read_u32::<LittleEndian>()? as usize;
 
         let end = if tuple_ptr.buf_offset() > 0 {
             let mut reader = Cursor::new(
-                &read_lock[BufPage::offset_to_ptr(tuple_ptr.buf_offset() - 1)
+                &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset() - 1)
                 ..BufPage::offset_to_ptr(tuple_ptr.buf_offset())]);
             reader.read_u32::<LittleEndian>()? as usize
         }
@@ -121,7 +112,7 @@ impl BufPage {
             PAGE_SIZE
         };
 
-        Ok(start..end)
+        Ok(&self.buf[start..end])
     }
 
     pub fn iter(&self) -> Iter {
@@ -169,8 +160,8 @@ impl BufPage {
 
     fn tuple_data_len(&self, tuple_ptr: &TuplePtr)
             -> Result<usize, std::io::Error> {
-        let current_tuple_range = self.get_tuple_data_range(tuple_ptr)?;
-        Ok(current_tuple_range.end - current_tuple_range.start)
+        let tuple_data = self.get_tuple_data(tuple_ptr)?;
+        Ok(tuple_data.len())
     }
 
     fn available_data_space(&self) -> usize {
@@ -185,13 +176,13 @@ pub struct Iter<'a> {
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = std::ops::Range<usize>;
+    type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self.buf_page.get_tuple_data_range(&self.tuple_ptr) {
-            Ok(range) => {
+        match self.buf_page.get_tuple_data(&self.tuple_ptr) {
+            Ok(data) => {
                 self.tuple_ptr.inc_buf_offset();
-                Some(range)
+                Some(data)
             },
             Err(_) => None
         }

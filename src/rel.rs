@@ -13,20 +13,25 @@ struct Rel {
 impl Rel {
     pub fn load(rel_id: ID, buf_mgr: &mut BufMgr) -> Result<Rel, std::io::Error> {
         let buf_page = buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
-        let read_lock = buf_page.buf.read().unwrap();
+        let lock = buf_page.read().unwrap();
 
         // The data should have at least num_attr, and an attr type
-        assert!(buf_page.tuple_count() >= 2);
+        assert!(lock.tuple_count() >= 2);
 
-        let mut iter = buf_page.iter();
-        let mut cursor = Cursor::new(&read_lock[iter.next().unwrap()]);
-        let num_attr = cursor.read_u32::<LittleEndian>()?;
+        let mut iter = lock.iter();
+        let num_attr = {
+            let data = iter.next().unwrap();
+            Rel::assert_data_len(&data, 4)?;
+            let mut cursor = Cursor::new(&data);
+            cursor.read_u32::<LittleEndian>()?
+        };
 
         let mut attr_ids = vec![];
         for _ in 0..num_attr {
             match iter.next() {
-                Some(range) => {
-                    let mut cursor = Cursor::new(&read_lock[range]);
+                Some(data) => {
+                    Rel::assert_data_len(&data, 4)?;
+                    let mut cursor = Cursor::new(&data);
                     attr_ids.push(cursor.read_u32::<LittleEndian>()?);
                 },
                 None => { return Err(std::io::Error::new(
@@ -36,5 +41,15 @@ impl Rel {
         }
 
         Ok(Rel { rel_id, tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap() })
+    }
+
+    fn assert_data_len(data: &[u8], desired_len: usize) -> Result<(), std::io::Error> {
+        if data.len() == desired_len {
+            Ok(())
+        }
+        else {
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                                    "Data does not have desired length"))
+        }
     }
 }
