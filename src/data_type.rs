@@ -1,10 +1,11 @@
 use byteorder::{ByteOrder, LittleEndian};
 
 enum_from_primitive!{
-pub enum DataType {
-    Char,
-    Integer,
-}
+    #[derive(Copy, Clone)]
+    pub enum DataType {
+        Char,
+        Integer,
+    }
 }
 
 impl DataType {

@@ -5,15 +5,17 @@ use data_type::DataType;
 use tuple::TupleData;
 
 pub struct TupleDesc {
-    attr_types: Vec<DataType>,
+    pub attr_types: Vec<DataType>,
 }
 
 impl TupleDesc {
     pub fn new(attr_types: Vec<DataType>) -> TupleDesc {
+        assert!(attr_types.len() < 10000);
         TupleDesc { attr_types }
     }
 
     pub fn from_attr_ids(attr_ids: &Vec<u32>) -> Option<TupleDesc> {
+        assert!(attr_ids.len() < 10000);
         let mut attr_types = vec![];
         for id in attr_ids.iter() {
             match DataType::from_u32(*id) {
@@ -34,5 +36,9 @@ impl TupleDesc {
         }
 
         data
+    }
+
+    pub fn num_attrs(&self) -> u32 {
+        self.attr_types.len() as u32
     }
 }
