@@ -164,7 +164,7 @@ impl BufPage {
         Ok(tuple_data.len())
     }
 
-    fn available_data_space(&self) -> usize {
+    pub fn available_data_space(&self) -> usize {
         // - 4 because we also have to make space for a new ptr
         self.upper_ptr - self.lower_ptr - 4
     }
