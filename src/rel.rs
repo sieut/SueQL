@@ -63,9 +63,9 @@ impl Rel {
             -> Result<Rel, std::io::Error> {
         let rel_id = common::get_new_id(buf_mgr)?;
         let rel = Rel{ rel_id, tuple_desc, num_data_pages: 0 };
-        utils::create_file(&rel.to_filename())?;
 
-        let buf_page = buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
+        // Create new data file
+        let buf_page = buf_mgr.new_buf(&BufKey::new(rel_id, 0))?;
         let mut lock = buf_page.write().unwrap();
 
         // Write num attrs
