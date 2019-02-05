@@ -11,6 +11,7 @@ use utils;
 struct Rel {
     rel_id: common::ID,
     tuple_desc: TupleDesc,
+    num_data_pages: usize,
 }
 
 impl Rel {
@@ -44,16 +45,24 @@ impl Rel {
             };
         }
 
+        let num_data_pages = {
+            let data = iter.next().unwrap();
+            utils::assert_data_len(&data, 4)?;
+            let mut cursor = Cursor::new(&data);
+            cursor.read_u32::<LittleEndian>()? as usize
+        };
+
         Ok(Rel {
             rel_id,
-            tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap()
+            tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap(),
+            num_data_pages
         })
     }
 
     pub fn new(tuple_desc: TupleDesc, buf_mgr: &mut BufMgr)
             -> Result<Rel, std::io::Error> {
         let rel_id = common::get_new_id(buf_mgr)?;
-        let rel = Rel{ rel_id, tuple_desc };
+        let rel = Rel{ rel_id, tuple_desc, num_data_pages: 0 };
         utils::create_file(&rel.to_filename())?;
 
         let buf_page = buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
@@ -70,6 +79,13 @@ impl Rel {
         for attr in rel.tuple_desc.attr_types.iter() {
             let mut data: Vec<u8> = vec![];
             LittleEndian::write_u32(&mut data, *attr as u32);
+            lock.write_tuple_data(&data, None)?;
+        }
+
+        // Write num data pages
+        {
+            let mut data: Vec<u8> = vec![];
+            LittleEndian::write_u32(&mut data, 0);
             lock.write_tuple_data(&data, None)?;
         }
 
