@@ -43,6 +43,22 @@ fn test_bufmgr_store() {
     assert_eq!(lock.buf[1], 1);
 }
 
+#[test]
+fn test_bufmgr_new_buf() {
+    let data_file = "3.dat";
+
+    setup_bufmgr(data_file);
+    let mut buf_mgr = BufMgr::new();
+    assert!(buf_mgr.new_buf(&BufKey::new(3, 2)).is_err());
+    assert!(buf_mgr.new_buf(&BufKey::new(3, 0)).is_err());
+
+    let buf_page = buf_mgr.new_buf(&BufKey::new(3, 1)).unwrap();
+    teardown_bufmgr(data_file);
+
+    let lock = buf_page.read().unwrap();
+    for byte in lock.buf.iter() { assert_eq!(*byte, 0); }
+}
+
 fn setup_bufmgr(data_file: &str) {
     let mut file = File::create(data_file).unwrap();
     file.write_all(&[0; PAGE_SIZE as usize]).unwrap();
