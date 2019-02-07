@@ -38,6 +38,24 @@ impl TupleDesc {
         data
     }
 
+    pub fn assert_data_len(&self, data: &[u8]) -> Result<(), std::io::Error> {
+        let mut sum = 0;
+        for attr in self.attr_types.iter() {
+            sum += match attr.size() {
+                Some(size) => size,
+                None => { return Ok(()); }
+            }
+        }
+
+        if sum == data.len() {
+            Ok(())
+        }
+        else {
+            Err(std::io::Error::new(std::io::ErrorKind::InvalidData,
+                                    "Data doesn't match with tuple desc"))
+        }
+    }
+
     pub fn num_attrs(&self) -> u32 {
         self.attr_types.len() as u32
     }

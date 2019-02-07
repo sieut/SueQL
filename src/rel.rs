@@ -10,8 +10,8 @@ use utils;
 ///     - First page of file is metadata of the relation
 struct Rel {
     rel_id: common::ID,
-    tuple_desc: TupleDesc,
     num_data_pages: usize,
+    tuple_desc: TupleDesc,
 }
 
 impl Rel {
@@ -20,10 +20,17 @@ impl Rel {
         let buf_page = buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
         let lock = buf_page.read().unwrap();
 
-        // The data should have at least num_attr, and an attr type
-        assert!(lock.tuple_count() >= 2);
+        // The data should have at least num_data_pages, num_attr, and an attr type
+        assert!(lock.tuple_count() >= 3);
 
         let mut iter = lock.iter();
+        let num_data_pages = {
+            let data = iter.next().unwrap();
+            utils::assert_data_len(&data, 4)?;
+            let mut cursor = Cursor::new(&data);
+            cursor.read_u32::<LittleEndian>()? as usize
+        };
+
         let num_attr = {
             let data = iter.next().unwrap();
             utils::assert_data_len(&data, 4)?;
@@ -45,13 +52,6 @@ impl Rel {
             };
         }
 
-        let num_data_pages = {
-            let data = iter.next().unwrap();
-            utils::assert_data_len(&data, 4)?;
-            let mut cursor = Cursor::new(&data);
-            cursor.read_u32::<LittleEndian>()? as usize
-        };
-
         Ok(Rel {
             rel_id,
             tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap(),
@@ -68,13 +68,18 @@ impl Rel {
         let buf_page = buf_mgr.new_buf(&BufKey::new(rel_id, 0))?;
         let mut lock = buf_page.write().unwrap();
 
+        // Write num data pages
+        {
+            let mut data: Vec<u8> = vec![];
+            LittleEndian::write_u32(&mut data, 0);
+            lock.write_tuple_data(&data, None)?;
+        }
         // Write num attrs
         {
             let mut data: Vec<u8> = vec![];
             LittleEndian::write_u32(&mut data, rel.tuple_desc.num_attrs());
             lock.write_tuple_data(&data, None)?;
         }
-
         // Write attr types
         for attr in rel.tuple_desc.attr_types.iter() {
             let mut data: Vec<u8> = vec![];
@@ -82,14 +87,37 @@ impl Rel {
             lock.write_tuple_data(&data, None)?;
         }
 
-        // Write num data pages
-        {
-            let mut data: Vec<u8> = vec![];
-            LittleEndian::write_u32(&mut data, 0);
-            lock.write_tuple_data(&data, None)?;
+        Ok(rel)
+    }
+
+    pub fn write_tuple(&self, data: &[u8]) -> Result<(), std::io::Error> {
+        self.tuple_desc.assert_data_len(data)?;
+
+        let last_page = buf_mgr.get_buf(
+            &BufKey::new(self.rel_id, self.num_data_pages))?;
+        let mut lock = last_page.write().unwrap();
+
+        // Not enough space in page, have to create a new one
+        if lock.available_data_space() < data.len() + 4 {
+            let new_page = buf_mgr.new_buf(
+                &BufKey::new(self.rel_id, self.num_data_pages + 1)?);
+
+            let meta_page = buf_mgr.get_buf(
+                &BufKey::new(self.rel_id, 0)?);
+            let mut meta_lock = meta_page.write_lock().unwrap();
+
+            self.num_data_pages += 1;
+            let mut pages_data: Vec<u8> = vec![];
+            LittleEndian::write_u32(&mut pages_data, self.num_data_pages);
+            meta_lock.write_tuple_data(
+                &pages_data,
+                Some(&TuplePtr::new(BufKey::new(self.rel_id, 0), 0)))?;
+
+            lock = new_page.write().unwrap();
         }
 
-        Ok(rel)
+        lock.write_tuple_data(data, None)?;
+        Ok(())
     }
 
     fn to_filename(&self) -> String {
