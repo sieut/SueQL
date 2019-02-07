@@ -4,6 +4,7 @@ use common;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 use tuple::tuple_desc::TupleDesc;
+use tuple::tuple_ptr::TuplePtr;
 use utils;
 
 /// Represent a Relation on disk:
@@ -90,25 +91,26 @@ impl Rel {
         Ok(rel)
     }
 
-    pub fn write_tuple(&self, data: &[u8]) -> Result<(), std::io::Error> {
+    pub fn write_tuple(&self, data: &[u8], buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
         self.tuple_desc.assert_data_len(data)?;
 
         let last_page = buf_mgr.get_buf(
-            &BufKey::new(self.rel_id, self.num_data_pages))?;
+            &BufKey::new(self.rel_id, self.num_data_pages as u64))?;
         let mut lock = last_page.write().unwrap();
 
         // Not enough space in page, have to create a new one
         if lock.available_data_space() < data.len() + 4 {
             let new_page = buf_mgr.new_buf(
-                &BufKey::new(self.rel_id, self.num_data_pages + 1)?);
+                &BufKey::new(self.rel_id, (self.num_data_pages + 1) as u64))?;
 
             let meta_page = buf_mgr.get_buf(
-                &BufKey::new(self.rel_id, 0)?);
-            let mut meta_lock = meta_page.write_lock().unwrap();
+                &BufKey::new(self.rel_id, 0))?;
+            let mut meta_lock = meta_page.write().unwrap();
 
             self.num_data_pages += 1;
             let mut pages_data: Vec<u8> = vec![];
-            LittleEndian::write_u32(&mut pages_data, self.num_data_pages);
+            LittleEndian::write_u32(
+                &mut pages_data, self.num_data_pages as u32);
             meta_lock.write_tuple_data(
                 &pages_data,
                 Some(&TuplePtr::new(BufKey::new(self.rel_id, 0), 0)))?;
