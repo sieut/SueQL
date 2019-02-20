@@ -24,6 +24,12 @@ pub struct BufPage {
 pub type PagePtr = usize;
 
 impl BufPage {
+    pub fn default_buf() -> Vec<u8> {
+        let mut vec = vec![0 as u8; PAGE_SIZE];
+        LittleEndian::write_u32(&mut vec[0..4], PAGE_SIZE as u32);
+        vec
+    }
+
     pub fn load_from(buffer: &[u8; PAGE_SIZE as usize], buf_key: &BufKey)
             -> Result<BufPage, std::io::Error> {
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);

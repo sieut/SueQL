@@ -70,7 +70,7 @@ impl BufMgr {
                 let mut file = fs::OpenOptions::new().write(true)
                     .open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-                file.write_all(&[0 as u8; storage::PAGE_SIZE])?;
+                file.write_all(&BufPage::default_buf())?;
                 self.get_buf(key)
             }
         }
