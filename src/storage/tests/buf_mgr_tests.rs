@@ -54,9 +54,6 @@ fn test_bufmgr_new_buf() {
 
     let buf_page = buf_mgr.new_buf(&BufKey::new(3, 1)).unwrap();
     teardown_bufmgr(data_file);
-
-    let lock = buf_page.read().unwrap();
-    for byte in lock.buf.iter() { assert_eq!(*byte, 0); }
 }
 
 fn setup_bufmgr(data_file: &str) {

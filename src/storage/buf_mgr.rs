@@ -2,14 +2,14 @@ use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::io::{Seek, Read, Write};
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use storage;
 use storage::buf_key::BufKey;
 use storage::buf_page::BufPage;
 use utils;
 
 pub struct BufMgr {
-    buf_table: HashMap<BufKey, RwLock<BufPage>>,
+    buf_table: HashMap<BufKey, Arc<RwLock<BufPage>>>,
 }
 
 impl BufMgr {
@@ -19,12 +19,30 @@ impl BufMgr {
         }
     }
 
+    pub fn has_buf(&self, key: &BufKey) -> bool {
+        self.buf_table.contains_key(key)
+    }
+
     pub fn get_buf(&mut self, key: &BufKey)
-            -> Result<&RwLock<BufPage>, io::Error> {
-        if !self.buf_table.contains_key(key) {
+            -> Result<Arc<RwLock<BufPage>>, io::Error> {
+        if !self.has_buf(key) {
             self.read_buf(key)?;
         }
-        Ok(self.buf_table.get_mut(key).unwrap())
+        Ok(Arc::clone(self.buf_table.get(key).unwrap()))
+    }
+
+    pub fn get_bufs(&mut self, keys: Vec<&BufKey>)
+            -> Result<Vec<Arc<RwLock<BufPage>>>, io::Error> {
+        let mut unread = vec![];
+        for key in keys.iter() {
+            if !self.has_buf(key) {
+                unread.push(*key)
+            }
+        }
+
+        self.read_bufs(unread)?;
+        Ok(keys.iter().map(
+                |&key| Arc::clone(self.buf_table.get(key).unwrap())).collect())
     }
 
     pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
@@ -42,7 +60,7 @@ impl BufMgr {
     }
 
     pub fn new_buf(&mut self, key: &BufKey)
-            -> Result<&RwLock<BufPage>, io::Error> {
+            -> Result<Arc<RwLock<BufPage>>, io::Error> {
         // Create new file
         if key.byte_offset() == 0 {
             // Check if the file already exists
@@ -76,15 +94,23 @@ impl BufMgr {
         }
     }
 
-    fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
+    pub fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
         let mut file = fs::File::open(key.to_filename())?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
         let mut buf = [0 as u8; storage::PAGE_SIZE];
         file.read_exact(&mut buf)?;
 
-        self.buf_table.insert(key.clone(),
-                              RwLock::new(BufPage::load_from(&buf, key)?));
+        self.buf_table.insert(
+            key.clone(),
+            Arc::new(RwLock::new(BufPage::load_from(&buf, key)?)));
+        Ok(())
+    }
+
+    pub fn read_bufs(&mut self, keys: Vec<&BufKey>) -> Result<(), io::Error> {
+        for key in keys.iter() {
+            self.read_buf(key)?;
+        }
         Ok(())
     }
 }

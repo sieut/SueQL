@@ -1,6 +1,8 @@
 use std::io::Cursor;
+use std::sync::{RwLockWriteGuard};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use common;
+use storage::buf_page::BufPage;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 use tuple::tuple_desc::TupleDesc;
@@ -9,11 +11,12 @@ use utils;
 
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
-struct Rel {
+pub struct Rel {
     rel_id: common::ID,
-    num_data_pages: usize,
     tuple_desc: TupleDesc,
 }
+
+type RelGuard<'a> = RwLockWriteGuard<'a, BufPage>;
 
 impl Rel {
     pub fn load(rel_id: common::ID, buf_mgr: &mut BufMgr)
@@ -25,11 +28,11 @@ impl Rel {
         assert!(lock.tuple_count() >= 3);
 
         let mut iter = lock.iter();
-        let num_data_pages = {
+        let _num_data_pages = {
             let data = iter.next().unwrap();
             utils::assert_data_len(&data, 4)?;
             let mut cursor = Cursor::new(&data);
-            cursor.read_u32::<LittleEndian>()? as usize
+            cursor.read_u32::<LittleEndian>()?
         };
 
         let num_attr = {
@@ -56,14 +59,13 @@ impl Rel {
         Ok(Rel {
             rel_id,
             tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap(),
-            num_data_pages
         })
     }
 
     pub fn new(tuple_desc: TupleDesc, buf_mgr: &mut BufMgr)
             -> Result<Rel, std::io::Error> {
         let rel_id = common::get_new_id(buf_mgr)?;
-        let rel = Rel{ rel_id, tuple_desc, num_data_pages: 0 };
+        let rel = Rel{ rel_id, tuple_desc };
 
         // Create new data file
         let buf_page = buf_mgr.new_buf(&BufKey::new(rel_id, 0))?;
@@ -94,32 +96,46 @@ impl Rel {
     pub fn write_tuple(&self, data: &[u8], buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
         self.tuple_desc.assert_data_len(data)?;
 
-        let last_page = buf_mgr.get_buf(
-            &BufKey::new(self.rel_id, self.num_data_pages as u64))?;
-        let mut lock = last_page.write().unwrap();
+        let rel_lock = buf_mgr.get_buf(&self.meta_buf_key())?;
+        let mut rel_meta = rel_lock.write().unwrap();
+        let num_data_pages = self.num_data_pages(&rel_meta)?;
 
+        let data_page = buf_mgr.get_buf(
+            &BufKey::new(self.rel_id, num_data_pages as u64))?;
+        let mut lock = data_page.write().unwrap();
+
+        if lock.available_data_space() >= data.len() + 4 {
+            lock.write_tuple_data(data, None)?;
+            Ok(())
+        }
         // Not enough space in page, have to create a new one
-        if lock.available_data_space() < data.len() + 4 {
+        else {
             let new_page = buf_mgr.new_buf(
-                &BufKey::new(self.rel_id, (self.num_data_pages + 1) as u64))?;
+                &BufKey::new(self.rel_id, (num_data_pages + 1) as u64))?;
 
-            let meta_page = buf_mgr.get_buf(
-                &BufKey::new(self.rel_id, 0))?;
-            let mut meta_lock = meta_page.write().unwrap();
-
-            self.num_data_pages += 1;
             let mut pages_data: Vec<u8> = vec![];
             LittleEndian::write_u32(
-                &mut pages_data, self.num_data_pages as u32);
-            meta_lock.write_tuple_data(
+                &mut pages_data, (num_data_pages + 1) as u32);
+            rel_meta.write_tuple_data(
                 &pages_data,
-                Some(&TuplePtr::new(BufKey::new(self.rel_id, 0), 0)))?;
+                Some(&TuplePtr::new(self.meta_buf_key(), 0)))?;
 
-            lock = new_page.write().unwrap();
+            let mut lock = new_page.write().unwrap();
+            lock.write_tuple_data(data, None)?;
+            Ok(())
         }
+    }
 
-        lock.write_tuple_data(data, None)?;
-        Ok(())
+    fn meta_buf_key(&self) -> BufKey {
+        BufKey::new(self.rel_id, 0)
+    }
+
+    fn num_data_pages(&self, lock: &RelGuard) -> Result<u32, std::io::Error> {
+        let tup_ptr = TuplePtr::new(self.meta_buf_key(), 0);
+        let data = lock.get_tuple_data(&tup_ptr)?;
+        utils::assert_data_len(&data, 4)?;
+        let mut cursor = Cursor::new(&data);
+        Ok(cursor.read_u32::<LittleEndian>()?)
     }
 
     fn to_filename(&self) -> String {
