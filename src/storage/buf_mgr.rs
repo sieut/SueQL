@@ -94,7 +94,7 @@ impl BufMgr {
         }
     }
 
-    pub fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
+    fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
         let mut file = fs::File::open(key.to_filename())?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
@@ -104,13 +104,6 @@ impl BufMgr {
         self.buf_table.insert(
             key.clone(),
             Arc::new(RwLock::new(BufPage::load_from(&buf, key)?)));
-        Ok(())
-    }
-
-    pub fn read_bufs(&mut self, keys: Vec<&BufKey>) -> Result<(), io::Error> {
-        for key in keys.iter() {
-            self.read_buf(key)?;
-        }
         Ok(())
     }
 }
