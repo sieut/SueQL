@@ -10,12 +10,21 @@ use utils;
 
 pub struct BufMgr {
     buf_table: HashMap<BufKey, Arc<RwLock<BufPage>>>,
+    buf_ref_table: HashMap<BufKey, bool>,
+    buf_q: Vec<BufKey>,
+    buf_q_hand: usize,
+    max_size: usize,
 }
 
 impl BufMgr {
-    pub fn new() -> BufMgr {
+    pub fn new(max_size: Option<usize>) -> BufMgr {
         BufMgr {
             buf_table: HashMap::new(),
+            buf_ref_table: HashMap::new(),
+            buf_q: vec![],
+            buf_q_hand: 0,
+            // Default size a bit less than 4GB
+            max_size: match max_size { Some(size) => size, None => 80000 },
         }
     }
 
@@ -28,21 +37,8 @@ impl BufMgr {
         if !self.has_buf(key) {
             self.read_buf(key)?;
         }
+        *self.buf_ref_table.get_mut(key).unwrap() = true;
         Ok(Arc::clone(self.buf_table.get(key).unwrap()))
-    }
-
-    pub fn get_bufs(&mut self, keys: Vec<&BufKey>)
-            -> Result<Vec<Arc<RwLock<BufPage>>>, io::Error> {
-        let mut unread = vec![];
-        for key in keys.iter() {
-            if !self.has_buf(key) {
-                unread.push(*key)
-            }
-        }
-
-        self.read_bufs(unread)?;
-        Ok(keys.iter().map(
-                |&key| Arc::clone(self.buf_table.get(key).unwrap())).collect())
     }
 
     pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
@@ -101,9 +97,47 @@ impl BufMgr {
         let mut buf = [0 as u8; storage::PAGE_SIZE];
         file.read_exact(&mut buf)?;
 
+        if self.buf_q.len() >= self.max_size {
+            // TODO locking
+            self.evict()?;
+        }
+
         self.buf_table.insert(
             key.clone(),
             Arc::new(RwLock::new(BufPage::load_from(&buf, key)?)));
+        self.buf_ref_table.insert(key.clone(), false);
+        self.buf_q.push(key.clone());
         Ok(())
+    }
+
+    fn evict(&mut self) -> Result<(), io::Error> {
+        {
+            let to_evict = loop {
+                let key = &self.buf_q[self.buf_q_hand];
+                // Keep the page if it was referenced within the cycle
+                // or if it is still being used
+                if *self.buf_ref_table.get(key).unwrap()
+                        || self.ref_count(key) > 0 {
+                    *self.buf_ref_table.get_mut(key).unwrap() = false;
+                    self.buf_q_hand = (self.buf_q_hand + 1) % self.buf_q.len();
+                }
+                else {
+                    break key;
+                }
+            };
+
+            self.buf_table.remove(to_evict).unwrap();
+            self.buf_ref_table.remove(to_evict).unwrap();
+        }
+
+        self.buf_q.remove(self.buf_q_hand);
+        self.buf_q_hand = self.buf_q_hand % self.buf_q.len();
+        Ok(())
+    }
+
+    // Return number of threads that are using a page
+    fn ref_count(&self, key: &BufKey) -> usize {
+        // -1 because the BufMgr has 1 ref to the page
+        Arc::strong_count(self.buf_table.get(key).unwrap()) - 1
     }
 }
