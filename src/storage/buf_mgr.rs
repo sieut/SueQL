@@ -10,17 +10,22 @@ use utils;
 
 pub struct BufMgr {
     buf_table: HashMap<BufKey, Arc<RwLock<BufPage>>>,
-    buf_ref_table: HashMap<BufKey, bool>,
+    info_table: HashMap<BufKey, BufInfo>,
     buf_q: Vec<BufKey>,
     buf_q_hand: usize,
     max_size: usize,
+}
+
+struct BufInfo {
+    ref_bit: bool,
+    index_lock: Arc<RwLock<()>>,
 }
 
 impl BufMgr {
     pub fn new(max_size: Option<usize>) -> BufMgr {
         BufMgr {
             buf_table: HashMap::new(),
-            buf_ref_table: HashMap::new(),
+            info_table: HashMap::new(),
             buf_q: vec![],
             buf_q_hand: 0,
             // Default size a bit less than 4GB
@@ -37,7 +42,10 @@ impl BufMgr {
         if !self.has_buf(key) {
             self.read_buf(key)?;
         }
-        *self.buf_ref_table.get_mut(key).unwrap() = true;
+
+        let info = self.info_table.get_mut(key).unwrap();
+        let _lock = info.index_lock.read().unwrap();
+        info.ref_bit = true;
         Ok(Arc::clone(self.buf_table.get(key).unwrap()))
     }
 
@@ -105,34 +113,47 @@ impl BufMgr {
         self.buf_table.insert(
             key.clone(),
             Arc::new(RwLock::new(BufPage::load_from(&buf, key)?)));
-        self.buf_ref_table.insert(key.clone(), false);
+        self.info_table.insert(
+            key.clone(),
+            BufInfo { ref_bit: false, index_lock: Arc::new(RwLock::new(())) });
         self.buf_q.push(key.clone());
         Ok(())
     }
 
     fn evict(&mut self) -> Result<(), io::Error> {
-        {
-            let to_evict = loop {
-                let key = &self.buf_q[self.buf_q_hand];
-                // Keep the page if it was referenced within the cycle
-                // or if it is still being used
-                if *self.buf_ref_table.get(key).unwrap()
-                        || self.ref_count(key) > 0 {
-                    *self.buf_ref_table.get_mut(key).unwrap() = false;
-                    self.buf_q_hand = (self.buf_q_hand + 1) % self.buf_q.len();
-                }
-                else {
-                    break key;
-                }
-            };
+        loop {
+            let key = self.buf_q[self.buf_q_hand].clone();
+            {
+                // Try to acquire exclusive lock on index
+                let index_lock = Arc::clone(
+                    &self.info_table.get(&key).unwrap().index_lock);
+                let exclusive = match index_lock.try_write() {
+                    Ok(lock) => Some(lock),
+                    Err(_) => None
+                };
 
-            self.buf_table.remove(to_evict).unwrap();
-            self.buf_ref_table.remove(to_evict).unwrap();
-        }
+                // Evict the page if its ref_bit is false
+                // and it is not being used and we can hold its index lock
+                if !self.ref_bit(&key)
+                        && self.ref_count(&key) == 0
+                        && exclusive.is_some() {
+                    self.buf_table.remove(&key).unwrap();
+                    self.info_table.remove(&key).unwrap();
+                    self.buf_q.remove(self.buf_q_hand);
+                    self.buf_q_hand = self.buf_q_hand % self.buf_q.len();
+                    break;
+                }
+            }
 
-        self.buf_q.remove(self.buf_q_hand);
-        self.buf_q_hand = self.buf_q_hand % self.buf_q.len();
+            self.info_table.get_mut(&key).unwrap().ref_bit = false;
+            self.buf_q_hand = (self.buf_q_hand + 1) % self.buf_q.len();
+        };
+
         Ok(())
+    }
+
+    fn ref_bit(&self, key: &BufKey) -> bool {
+        self.info_table.get(key).unwrap().ref_bit
     }
 
     // Return number of threads that are using a page
