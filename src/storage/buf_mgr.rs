@@ -162,7 +162,3 @@ impl BufMgr {
         Arc::strong_count(self.buf_table.get(key).unwrap()) - 1
     }
 }
-
-// TODO is there a way to not use unsafe impl here?
-unsafe impl Sync for BufMgr {}
-unsafe impl Send for BufMgr {}

@@ -5,6 +5,15 @@ use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 
 #[test]
+fn test_bufmgr_send_sync() {
+    fn assert_send<T: Send>() {}
+    fn assert_sync<T: Sync>() {}
+
+    assert_send::<BufMgr>();
+    assert_sync::<BufMgr>();
+}
+
+#[test]
 fn test_bufmgr_get() {
     let data_file = "1.dat";
 
