@@ -7,7 +7,7 @@ use utils;
 
 pub type ID = u64;
 
-static META_REL_ID: ID = 0;
+pub static META_REL_ID: ID = 0;
 static CUR_ID_OFFSET: usize = 0;
 
 pub fn get_new_id(buf_mgr: &mut BufMgr) -> Result<ID, std::io::Error> {
