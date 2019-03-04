@@ -100,7 +100,7 @@ impl BufMgr {
                 Some(buf) => {
                     let info = self.get_info_arc(key).unwrap();
                     let mut write = info.write().unwrap();
-                    self.set_ref_bit(key, true);
+                    write.ref_bit = true;
                     break Ok(buf);
                 },
                 None => {
@@ -178,29 +178,28 @@ impl BufMgr {
         // Evict
         if self.buf_table_r.len() >= *(self.max_size) {
             loop {
-                let key = evict_q.front().unwrap().clone();
+                let key = evict_q.pop_front().unwrap();
                 // Holding a lock of buf's info will make sure
                 // another thread doesn't get this buf while it is
                 // being evicted
                 let info = self.get_info_arc(&key).unwrap();
-                let mut write = match info.try_write() {
-                    Ok(guard) => Some(guard),
-                    Err(_) => None
+                match info.try_write() {
+                    Ok(mut guard) => {
+                        // Evict the page IF:
+                        //      its ref_bit is false
+                        //      its ref_count is 0
+                        if !guard.ref_bit && self.ref_count(&key) == 0 {
+                            remove!(buf_w, key.clone());
+                            remove!(info_w, key.clone());
+                            break;
+                        }
+                        else {
+                            guard.ref_bit = false;
+                        }
+                    },
+                    Err(_) => {}
                 };
 
-                // Evict the page IF:
-                //      its ref_bit is false
-                //      its ref_count is 0
-                if write.is_some() && !write.unwrap().ref_bit
-                        && self.ref_count(&key) == 0 {
-                    remove!(buf_w, key.clone());
-                    remove!(info_w, key.clone());
-                    evict_q.pop_front().unwrap();
-                    break;
-                }
-
-                write.ref_bit = false;
-                evict_q.pop_front().unwrap();
                 evict_q.push_back(key);
             };
         }
