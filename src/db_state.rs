@@ -3,11 +3,13 @@ use common::META_REL_ID;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 
+#[derive(Clone)]
 pub struct DbState {
     pub buf_mgr: BufMgr,
     settings: DbSettings,
 }
 
+#[derive(Clone)]
 pub struct DbSettings {
     pub buf_mgr_size: Option<usize>,
 }
@@ -29,5 +31,13 @@ impl DbState {
             buf_mgr: buf_mgr,
             settings: settings,
         })
+    }
+}
+
+impl DbSettings {
+    pub fn default() -> DbSettings {
+        DbSettings {
+            buf_mgr_size: None
+        }
     }
 }
