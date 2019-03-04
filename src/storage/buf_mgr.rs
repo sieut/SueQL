@@ -182,6 +182,10 @@ impl BufMgr {
                     //      its ref_bit is false
                     //      it is not being used
                     if !self.ref_bit(&key) && self.ref_count(&key) == 0 {
+                        // NOTE: here the thread can be interrupted and
+                        // another thread comes in to get the victim, the
+                        // page will still be kept in heap because of Arc,
+                        // but this is a case to look at in the future
                         remove!(buf_w, key.clone());
                         remove!(info_w, key.clone());
                         evict_q.pop_front().unwrap();
