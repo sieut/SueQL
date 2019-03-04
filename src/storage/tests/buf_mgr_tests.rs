@@ -3,6 +3,7 @@ use std::io::{Write};
 use storage::PAGE_SIZE;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
+use storage::buf_page::{BufPage, HEADER_SIZE};
 
 #[test]
 fn test_bufmgr_get() {
@@ -14,8 +15,7 @@ fn test_bufmgr_get() {
     teardown_bufmgr(data_file);
 
     let lock = buf_page.read().unwrap();
-    assert_eq!(lock.buf.len(), PAGE_SIZE);
-    for byte in lock.buf.iter() { assert_eq!(*byte, 0); }
+    assert_eq!(lock.buf().len(), PAGE_SIZE);
 }
 
 #[test]
@@ -28,8 +28,7 @@ fn test_bufmgr_store() {
         let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
         // Change values in buf_page
         let mut lock = buf_page.write().unwrap();
-        lock.buf[0] = 1;
-        lock.buf[1] = 1;
+        lock.write_tuple_data(&vec![1, 1, 1, 1], None);
     }
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(2, 0)).unwrap();
@@ -39,8 +38,9 @@ fn test_bufmgr_store() {
     teardown_bufmgr(data_file);
 
     let lock = buf_page.read().unwrap();
-    assert_eq!(lock.buf[0], 1);
-    assert_eq!(lock.buf[1], 1);
+    assert_eq!(lock.upper_ptr(), PAGE_SIZE - 4);
+    assert_eq!(lock.lower_ptr(), HEADER_SIZE + 4);
+    assert_eq!(lock.iter().next().unwrap().to_vec(), vec![1,1,1,1]);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn test_bufmgr_evict() {
 
 fn setup_bufmgr(data_file: &str) {
     let mut file = File::create(data_file).unwrap();
-    file.write_all(&[0; PAGE_SIZE as usize]).unwrap();
+    file.write_all(&BufPage::default_buf()).unwrap();
 }
 
 fn teardown_bufmgr(data_file: &str) {

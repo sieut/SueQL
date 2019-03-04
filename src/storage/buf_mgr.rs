@@ -114,10 +114,12 @@ impl BufMgr {
         match self.get_buf_arc(key) {
             Some(buf_page) => {
                 let read_lock = buf_page.read().unwrap();
+                if !read_lock.dirty { return Ok(()); }
+
                 let mut file = fs::OpenOptions::new().write(true)
                     .open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-                file.write_all(&read_lock.buf.as_slice())?;
+                file.write_all(read_lock.buf().as_slice())?;
                 Ok(())
             },
             None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
@@ -189,6 +191,7 @@ impl BufMgr {
                         //      its ref_bit is false
                         //      its ref_count is 0
                         if !guard.ref_bit && self.ref_count(&key) == 0 {
+                            self.store_buf(&key)?;
                             remove!(buf_w, key.clone());
                             remove!(info_w, key.clone());
                             break;

@@ -6,19 +6,20 @@ use storage::{PAGE_SIZE};
 use storage::buf_key::BufKey;
 use tuple::tuple_ptr::TuplePtr;
 
-static HEADER_SIZE: usize = 8;
+pub const HEADER_SIZE: usize = 8;
 const UPPER_PTR_RANGE: std::ops::Range<usize> = (0..4);
 const LOWER_PTR_RANGE: std::ops::Range<usize> = (4..8);
 
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
 pub struct BufPage {
-    pub buf: Vec<u8>,
+    buf: Vec<u8>,
     // Values in page's header
     upper_ptr: PagePtr,
     lower_ptr: PagePtr,
     // BufKey for assertions
     buf_key: BufKey,
+    pub dirty: bool,
 }
 
 pub type PagePtr = usize;
@@ -26,7 +27,8 @@ pub type PagePtr = usize;
 impl BufPage {
     pub fn default_buf() -> Vec<u8> {
         let mut vec = vec![0 as u8; PAGE_SIZE];
-        LittleEndian::write_u32(&mut vec[0..4], PAGE_SIZE as u32);
+        LittleEndian::write_u32(&mut vec[UPPER_PTR_RANGE], PAGE_SIZE as u32);
+        LittleEndian::write_u32(&mut vec[LOWER_PTR_RANGE], HEADER_SIZE as u32);
         vec
     }
 
@@ -41,6 +43,7 @@ impl BufPage {
             upper_ptr,
             lower_ptr,
             buf_key: buf_key.clone(),
+            dirty: false,
         })
     }
 
@@ -96,6 +99,7 @@ impl BufPage {
 
         self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
+        self.dirty = true;
 
         Ok(ret_offset)
     }
@@ -134,6 +138,10 @@ impl BufPage {
 
     pub fn lower_ptr(&self) -> PagePtr {
         self.lower_ptr
+    }
+
+    pub fn buf(&self) -> &Vec<u8> {
+        &self.buf
     }
 
     fn offset_to_ptr(buf_offset: usize) -> PagePtr {
