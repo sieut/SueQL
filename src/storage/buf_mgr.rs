@@ -1,56 +1,115 @@
-use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::fs;
 use std::io;
 use std::io::{Seek, Read, Write};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
+use evmap;
 use storage;
 use storage::buf_key::BufKey;
 use storage::buf_page::BufPage;
 use utils;
 
-pub struct BufMgr {
-    buf_table: HashMap<BufKey, Arc<RwLock<BufPage>>>,
-    info_table: HashMap<BufKey, BufInfo>,
-    buf_q: Vec<BufKey>,
-    buf_q_hand: usize,
-    max_size: usize,
+#[macro_use]
+macro_rules! insert {
+    ($evmap_lock:expr, $key:expr, $val:expr) => {
+        $evmap_lock.insert($key, $val);
+        $evmap_lock.refresh();
+    }
 }
+
+#[macro_use]
+macro_rules! remove {
+    ($evmap_lock:expr, $key:expr) => {
+        $evmap_lock.empty($key);
+        $evmap_lock.refresh();
+    }
+}
+
+struct MapItem<T> {
+    item: Arc<RwLock<T>>,
+}
+
+impl<T> MapItem<T> {
+    fn new(item: T) -> Self {
+        Self { item: Arc::new(RwLock::new(item)) }
+    }
+}
+
+impl<T> evmap::ShallowCopy for MapItem<T> {
+    unsafe fn shallow_copy(&mut self) -> Self {
+        self.clone()
+    }
+}
+
+impl<T> Clone for MapItem<T> {
+    fn clone(&self) -> Self {
+        Self { item: Arc::clone(&self.item) }
+    }
+}
+
+impl<T> PartialEq for MapItem<T> {
+    fn eq(&self, other: &MapItem<T>) -> bool {
+        Arc::ptr_eq(&self.item, &other.item)
+    }
+}
+
+impl<T> Eq for MapItem<T> {}
 
 struct BufInfo {
     ref_bit: bool,
-    index_lock: Arc<RwLock<()>>,
+}
+
+#[derive(Clone)]
+pub struct BufMgr {
+    buf_table_r: evmap::ReadHandle<BufKey, MapItem<BufPage>>,
+    buf_table_w: Arc<Mutex<evmap::WriteHandle<BufKey, MapItem<BufPage>>>>,
+    info_table_r: evmap::ReadHandle<BufKey, MapItem<BufInfo>>,
+    info_table_w: Arc<Mutex<evmap::WriteHandle<BufKey, MapItem<BufInfo>>>>,
+    evict_queue: Arc<Mutex<VecDeque<BufKey>>>,
+    max_size: Arc<usize>,
 }
 
 impl BufMgr {
     pub fn new(max_size: Option<usize>) -> BufMgr {
+        let buf_table = evmap::new::<BufKey, MapItem<BufPage>>();
+        let info_table = evmap::new::<BufKey, MapItem<BufInfo>>();
+
         BufMgr {
-            buf_table: HashMap::new(),
-            info_table: HashMap::new(),
-            buf_q: vec![],
-            buf_q_hand: 0,
+            buf_table_r:    buf_table.0,
+            buf_table_w:    Arc::new(Mutex::new(buf_table.1)),
+            info_table_r:   info_table.0,
+            info_table_w:   Arc::new(Mutex::new(info_table.1)),
+            evict_queue:    Arc::new(Mutex::new(VecDeque::new())),
             // Default size a bit less than 4GB
-            max_size: match max_size { Some(size) => size, None => 80000 },
+            max_size:       match max_size {
+                                Some(size) => Arc::new(size),
+                                None => Arc::new(80000)
+                            },
         }
     }
 
     pub fn has_buf(&self, key: &BufKey) -> bool {
-        self.buf_table.contains_key(key)
+        self.buf_table_r.contains_key(key)
     }
 
     pub fn get_buf(&mut self, key: &BufKey)
             -> Result<Arc<RwLock<BufPage>>, io::Error> {
-        if !self.has_buf(key) {
-            self.read_buf(key)?;
+        // TODO not the best way to get_buf, but the old way was not correct
+        loop {
+            match self.get_buf_arc(key) {
+                Some(arc) => {
+                    self.set_ref_bit(key, true);
+                    break Ok(arc);
+                },
+                None => {
+                    self.read_buf(key)?;
+                }
+            };
         }
-
-        let info = self.info_table.get_mut(key).unwrap();
-        let _lock = info.index_lock.read().unwrap();
-        info.ref_bit = true;
-        Ok(Arc::clone(self.buf_table.get(key).unwrap()))
     }
 
     pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
-        match self.buf_table.get(key) {
+        match self.get_buf_arc(key) {
             Some(buf_page) => {
                 let read_lock = buf_page.read().unwrap();
                 let mut file = fs::OpenOptions::new().write(true)
@@ -105,60 +164,74 @@ impl BufMgr {
         let mut buf = [0 as u8; storage::PAGE_SIZE];
         file.read_exact(&mut buf)?;
 
-        if self.buf_q.len() >= self.max_size {
-            // TODO locking
-            self.evict()?;
+        let mut buf_w = self.buf_table_w.lock().unwrap();
+        let mut info_w = self.info_table_w.lock().unwrap();
+        let mut evict_q = self.evict_queue.lock().unwrap();
+
+        // Could have been loaded after acquiring the locks
+        if self.has_buf(key) {
+            return Ok(());
         }
 
-        self.buf_table.insert(
+        // Evict
+        if self.buf_table_r.len() >= *(self.max_size) {
+            loop {
+                let key = evict_q.front().unwrap().clone();
+                {
+                    // Evict the page IF:
+                    //      its ref_bit is false
+                    //      it is not being used
+                    if !self.ref_bit(&key) && self.ref_count(&key) == 0 {
+                        remove!(buf_w, key.clone());
+                        remove!(info_w, key.clone());
+                        evict_q.pop_front().unwrap();
+                        break;
+                    }
+                }
+
+                self.set_ref_bit(&key, false);
+                evict_q.pop_front().unwrap();
+                evict_q.push_back(key);
+            };
+        }
+
+        insert!(
+            buf_w,
             key.clone(),
-            Arc::new(RwLock::new(BufPage::load_from(&buf, key)?)));
-        self.info_table.insert(
+            MapItem::new(BufPage::load_from(&buf, key)?));
+        insert!(
+            info_w,
             key.clone(),
-            BufInfo { ref_bit: false, index_lock: Arc::new(RwLock::new(())) });
-        self.buf_q.push(key.clone());
+            MapItem::new(BufInfo { ref_bit: false }));
+        evict_q.push_back(key.clone());
+
         Ok(())
     }
 
-    fn evict(&mut self) -> Result<(), io::Error> {
-        loop {
-            let key = self.buf_q[self.buf_q_hand].clone();
-            {
-                // Try to acquire exclusive lock on index
-                let index_lock = Arc::clone(
-                    &self.info_table.get(&key).unwrap().index_lock);
-                let exclusive = match index_lock.try_write() {
-                    Ok(lock) => Some(lock),
-                    Err(_) => None
-                };
+    fn get_buf_arc(&self, key: &BufKey) -> Option<Arc<RwLock<BufPage>>> {
+        self.buf_table_r.get_and(key, |bufs| bufs[0].clone().item)
+    }
 
-                // Evict the page if its ref_bit is false
-                // and it is not being used and we can hold its index lock
-                if !self.ref_bit(&key)
-                        && self.ref_count(&key) == 0
-                        && exclusive.is_some() {
-                    self.buf_table.remove(&key).unwrap();
-                    self.info_table.remove(&key).unwrap();
-                    self.buf_q.remove(self.buf_q_hand);
-                    self.buf_q_hand = self.buf_q_hand % self.buf_q.len();
-                    break;
-                }
-            }
+    fn get_info_arc(&self, key: &BufKey) -> Option<Arc<RwLock<BufInfo>>> {
+        self.info_table_r.get_and(key, |infos| infos[0].clone().item)
+    }
 
-            self.info_table.get_mut(&key).unwrap().ref_bit = false;
-            self.buf_q_hand = (self.buf_q_hand + 1) % self.buf_q.len();
-        };
-
-        Ok(())
+    fn set_ref_bit(&self, key: &BufKey, bit: bool) {
+        let info = self.get_info_arc(key).unwrap();
+        let mut write = info.write().unwrap();
+        write.ref_bit = bit;
     }
 
     fn ref_bit(&self, key: &BufKey) -> bool {
-        self.info_table.get(key).unwrap().ref_bit
+        let info = self.get_info_arc(key).unwrap();
+        let read = info.read().unwrap();
+        read.ref_bit
     }
 
     // Return number of threads that are using a page
     fn ref_count(&self, key: &BufKey) -> usize {
-        // -1 because the BufMgr has 1 ref to the page
-        Arc::strong_count(self.buf_table.get(key).unwrap()) - 1
+        // -3 because evmap has 2 refs
+        // and calling get_buf_arc will create a ref
+        Arc::strong_count(&self.get_buf_arc(key).unwrap()) - 3
     }
 }

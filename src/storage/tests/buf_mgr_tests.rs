@@ -5,15 +5,6 @@ use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 
 #[test]
-fn test_bufmgr_send_sync() {
-    fn assert_send<T: Send>() {}
-    fn assert_sync<T: Sync>() {}
-
-    assert_send::<BufMgr>();
-    assert_sync::<BufMgr>();
-}
-
-#[test]
 fn test_bufmgr_get() {
     let data_file = "1.dat";
 
@@ -78,41 +69,35 @@ fn test_bufmgr_evict() {
 
     // Queue: page-1  page-2  page-3
     // Ref:     1       1       1
-    // Hand:    ^
     buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
     assert!(!buf_mgr.has_buf(&BufKey::new(4, 1)));
 
     // Queue: page-2  page-3  page-0
     // Ref:     0       0       1
-    // Hand:    ^
     buf_mgr.get_buf(&BufKey::new(4, 1)).unwrap();
     assert!(!buf_mgr.has_buf(&BufKey::new(4, 2)));
 
     // Queue: page-3  page-0  page-1
     // Ref:     0       1       1
-    // Hand:    ^
     buf_mgr.get_buf(&BufKey::new(4, 3)).unwrap();
 
     // Queue: page-3  page-0  page-1
     // Ref:     1       1       1
-    // Hand:    ^
     buf_mgr.get_buf(&BufKey::new(4, 2)).unwrap();
     assert!(!buf_mgr.has_buf(&BufKey::new(4, 3)));
 
     // Queue: page-0  page-1  page-2
     // Ref:     0       0       1
-    // Hand:    ^
     buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
     buf_mgr.get_buf(&BufKey::new(4, 3)).unwrap();
     assert!(!buf_mgr.has_buf(&BufKey::new(4, 1)));
 
-    // Queue: page-0  page-2  page-3
-    // Ref:     0       1       1
-    // Hand:            ^
+    // Queue: page-2  page-0  page-3
+    // Ref:     1       0       1
     let _buf_two = buf_mgr.get_buf(&BufKey::new(4, 2)).unwrap();
     buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
     buf_mgr.get_buf(&BufKey::new(4, 1)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 3)));
+    assert!(!buf_mgr.has_buf(&BufKey::new(4, 0)));
     teardown_bufmgr(data_file);
 }
 
