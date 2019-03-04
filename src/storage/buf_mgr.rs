@@ -97,9 +97,11 @@ impl BufMgr {
         // TODO not the best way to get_buf, but the old way was not correct
         loop {
             match self.get_buf_arc(key) {
-                Some(arc) => {
+                Some(buf) => {
+                    let info = self.get_info_arc(key).unwrap();
+                    let mut write = info.write().unwrap();
                     self.set_ref_bit(key, true);
-                    break Ok(arc);
+                    break Ok(buf);
                 },
                 None => {
                     self.read_buf(key)?;
@@ -177,36 +179,35 @@ impl BufMgr {
         if self.buf_table_r.len() >= *(self.max_size) {
             loop {
                 let key = evict_q.front().unwrap().clone();
-                {
-                    // Evict the page IF:
-                    //      its ref_bit is false
-                    //      it is not being used
-                    if !self.ref_bit(&key) && self.ref_count(&key) == 0 {
-                        // NOTE: here the thread can be interrupted and
-                        // another thread comes in to get the victim, the
-                        // page will still be kept in heap because of Arc,
-                        // but this is a case to look at in the future
-                        remove!(buf_w, key.clone());
-                        remove!(info_w, key.clone());
-                        evict_q.pop_front().unwrap();
-                        break;
-                    }
+                // Holding a lock of buf's info will make sure
+                // another thread doesn't get this buf while it is
+                // being evicted
+                let info = self.get_info_arc(&key).unwrap();
+                let mut write = match info.try_write() {
+                    Ok(guard) => Some(guard),
+                    Err(_) => None
+                };
+
+                // Evict the page IF:
+                //      its ref_bit is false
+                //      its ref_count is 0
+                if write.is_some() && !write.unwrap().ref_bit
+                        && self.ref_count(&key) == 0 {
+                    remove!(buf_w, key.clone());
+                    remove!(info_w, key.clone());
+                    evict_q.pop_front().unwrap();
+                    break;
                 }
 
-                self.set_ref_bit(&key, false);
+                write.ref_bit = false;
                 evict_q.pop_front().unwrap();
                 evict_q.push_back(key);
             };
         }
 
-        insert!(
-            buf_w,
-            key.clone(),
-            MapItem::new(BufPage::load_from(&buf, key)?));
-        insert!(
-            info_w,
-            key.clone(),
-            MapItem::new(BufInfo { ref_bit: false }));
+        insert!(buf_w, key.clone(),
+                MapItem::new(BufPage::load_from(&buf, key)?));
+        insert!(info_w, key.clone(), MapItem::new(BufInfo { ref_bit: false }));
         evict_q.push_back(key.clone());
 
         Ok(())
@@ -218,18 +219,6 @@ impl BufMgr {
 
     fn get_info_arc(&self, key: &BufKey) -> Option<Arc<RwLock<BufInfo>>> {
         self.info_table_r.get_and(key, |infos| infos[0].clone().item)
-    }
-
-    fn set_ref_bit(&self, key: &BufKey, bit: bool) {
-        let info = self.get_info_arc(key).unwrap();
-        let mut write = info.write().unwrap();
-        write.ref_bit = bit;
-    }
-
-    fn ref_bit(&self, key: &BufKey) -> bool {
-        let info = self.get_info_arc(key).unwrap();
-        let read = info.read().unwrap();
-        read.ref_bit
     }
 
     // Return number of threads that are using a page
