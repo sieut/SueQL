@@ -102,7 +102,7 @@ impl BufMgr {
     pub fn new(max_size: Option<usize>) -> BufMgr {
         let buf_table = evmap::new::<BufKey, TableItem>();
 
-        BufMgr {
+        let mgr = BufMgr {
             buf_table_r:    buf_table.0,
             buf_table_w:    Arc::new(Mutex::new(buf_table.1)),
             evict_queue:    Arc::new(Mutex::new(VecDeque::new())),
@@ -111,7 +111,14 @@ impl BufMgr {
                                 Some(size) => Arc::new(size),
                                 None => Arc::new(80000)
                             },
-        }
+        };
+
+        let persister = Persister { buf_mgr: mgr.clone() };
+        std::thread::spawn(move || {
+            persister.persist_loop();
+        });
+
+        mgr
     }
 
     pub fn has_buf(&self, key: &BufKey) -> bool {
@@ -265,9 +272,26 @@ impl BufMgr {
 }
 
 struct Persister {
-    buf_table_r: evmap::ReadHandle<BufKey, TableItem>,
+    buf_mgr: BufMgr,
 }
 
 impl Persister {
-
+    fn persist_loop(&self) {
+        use std::{thread, time};
+        loop {
+            thread::sleep(time::Duration::from_millis(200));
+            let keys = self.buf_mgr.evict_queue.lock().unwrap().clone();
+            for it in keys.iter() {
+                match self.buf_mgr.store_buf(&*it, None) {
+                    Ok(_) => {},
+                    Err(e) => {
+                        match e.kind() {
+                            io::ErrorKind::NotFound => {},
+                            _ => panic!("Persister failed")
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
