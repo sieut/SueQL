@@ -85,7 +85,7 @@ impl PartialEq for TableItem {
 
 impl Eq for TableItem {}
 
-struct BufInfo {
+pub struct BufInfo {
     ref_bit: bool,
     dirty: bool,
 }
@@ -136,16 +136,26 @@ impl BufMgr {
         }
     }
 
-    pub fn store_buf(&self, key: &BufKey) -> Result<(), io::Error> {
+    pub fn store_buf(&self,
+                     key: &BufKey,
+                     info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>)
+            -> Result<(), io::Error> {
         match self.get_item(key) {
-            Some(buf) => {
-                let read_lock = buf.read().unwrap();
-                if !read_lock.dirty { return Ok(()); }
+            Some(item) => {
+                let page_lock = item.read().unwrap();
+                let mut info_lock = match info_lock {
+                    Some(lock) => lock,
+                    None => item.info.write().unwrap(),
+                };
+
+                if !info_lock.dirty { return Ok(()); }
 
                 let mut file = fs::OpenOptions::new().write(true)
                     .open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-                file.write_all(read_lock.buf().as_slice())?;
+                file.write_all(page_lock.buf().as_slice())?;
+
+                info_lock.dirty = false;
                 Ok(())
             },
             None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
@@ -216,7 +226,7 @@ impl BufMgr {
                         //      its ref_bit is false
                         //      its ref_count is 0
                         if !guard.ref_bit && self.ref_count(&key) == 0 {
-                            self.store_buf(&key)?;
+                            self.store_buf(&key, Some(guard))?;
                             remove!(buf_w, key.clone());
                             break;
                         }
@@ -252,4 +262,12 @@ impl BufMgr {
         // and calling get_item will create a ref
         self.get_item(key).unwrap().ref_count() - 3
     }
+}
+
+struct Persister {
+    buf_table_r: evmap::ReadHandle<BufKey, TableItem>,
+}
+
+impl Persister {
+
 }

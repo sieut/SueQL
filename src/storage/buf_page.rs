@@ -19,7 +19,6 @@ pub struct BufPage {
     lower_ptr: PagePtr,
     // BufKey for assertions
     buf_key: BufKey,
-    pub dirty: bool,
 }
 
 pub type PagePtr = usize;
@@ -43,7 +42,6 @@ impl BufPage {
             upper_ptr,
             lower_ptr,
             buf_key: buf_key.clone(),
-            dirty: false,
         })
     }
 
@@ -99,7 +97,6 @@ impl BufPage {
 
         self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
-        self.dirty = true;
 
         Ok(ret_offset)
     }

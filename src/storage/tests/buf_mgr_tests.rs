@@ -31,7 +31,7 @@ fn test_bufmgr_store() {
         lock.write_tuple_data(&vec![1, 1, 1, 1], None);
     }
     // Write buf page
-    buf_mgr.store_buf(&BufKey::new(2, 0)).unwrap();
+    buf_mgr.store_buf(&BufKey::new(2, 0), None).unwrap();
 
     let mut buf_mgr = BufMgr::new(None);
     let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
@@ -98,6 +98,20 @@ fn test_bufmgr_evict() {
     buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
     buf_mgr.get_buf(&BufKey::new(4, 1)).unwrap();
     assert!(!buf_mgr.has_buf(&BufKey::new(4, 0)));
+    teardown_bufmgr(data_file);
+}
+
+#[test]
+fn test_bufmgr_ref() {
+    let data_file = "5.dat";
+
+    setup_bufmgr(data_file);
+    let mut buf_mgr = BufMgr::new(None);
+    let mut clone = buf_mgr.clone();
+
+    let buf = buf_mgr.get_buf(&BufKey::new(5, 0)).unwrap();
+    let buf_clone = clone.get_buf(&BufKey::new(5, 0)).unwrap();
+    assert_eq!(buf.ref_count(), 3);
     teardown_bufmgr(data_file);
 }
 
