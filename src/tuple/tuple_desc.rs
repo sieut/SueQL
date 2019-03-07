@@ -38,10 +38,25 @@ impl TupleDesc {
         data
     }
 
+    pub fn data_to_strings(&self, bytes: &[u8]) -> Option<Vec<String>> {
+        let mut result = vec![];
+        let mut bytes_used = 0;
+        for attr in self.attr_types.iter() {
+            let slice = &bytes[bytes_used..bytes.len()];
+            match attr.bytes_to_string(slice) {
+                Some(string) => result.push(string),
+                None => { return None; }
+            };
+            bytes_used += attr.size(Some(slice)).unwrap();
+        }
+
+        Some(result)
+    }
+
     pub fn assert_data_len(&self, data: &[u8]) -> Result<(), std::io::Error> {
         let mut sum = 0;
         for attr in self.attr_types.iter() {
-            sum += match attr.size() {
+            sum += match attr.size(Some(&data[sum..data.len()])) {
                 Some(size) => size,
                 None => { return Ok(()); }
             }
