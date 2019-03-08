@@ -2,8 +2,10 @@ extern crate num;
 use self::num::FromPrimitive;
 
 use data_type::DataType;
+use nom_sql::Literal;
 use tuple::TupleData;
 
+#[derive(Clone)]
 pub struct TupleDesc {
     pub attr_types: Vec<DataType>,
 }
@@ -27,6 +29,21 @@ impl TupleDesc {
         Some(TupleDesc::new(attr_types))
     }
 
+    pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>) -> Vec<TupleData> {
+        let mut tuples = vec![];
+        for tup in inputs.iter() {
+            let mut data = vec![];
+            for (index, input) in tup.iter().enumerate() {
+                let data_type = self.attr_types.get(index).unwrap();
+                let mut bytes = data_type.data_from_literal(&input).unwrap();
+                data.append(&mut bytes);
+            }
+            tuples.push(data);
+        }
+
+        tuples
+    }
+
     pub fn create_tuple_data(&self, inputs: Vec<String>) -> TupleData {
         let mut data = vec![];
         for (index, input) in inputs.iter().enumerate() {
@@ -42,7 +59,9 @@ impl TupleDesc {
         let mut result = vec![];
         let mut bytes_used = 0;
         for attr in self.attr_types.iter() {
-            let slice = &bytes[bytes_used..bytes.len()];
+            let attr_size = attr.size(
+                Some(&bytes[bytes_used..bytes.len()])).unwrap();
+            let slice = &bytes[bytes_used..bytes_used + attr_size];
             match attr.bytes_to_string(slice) {
                 Some(string) => result.push(string),
                 None => { return None; }
