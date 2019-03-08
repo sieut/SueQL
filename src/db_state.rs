@@ -46,7 +46,9 @@ fn init_db(buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
         buf_mgr.get_buf(&table_key)?;
     }
     else {
-        buf_mgr.new_buf(&meta_key)?;
+        let meta = buf_mgr.new_buf(&meta_key)?;
+        meta.write().unwrap().write_tuple_data(&[0u8; 8], None)?;
+
         Rel::new(table_rel_desc(), buf_mgr, None)?;
     }
 
