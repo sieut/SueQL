@@ -1,9 +1,7 @@
 use std::io::Cursor;
-use std::sync::{RwLockReadGuard, RwLockWriteGuard};
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use common;
-use storage;
-use storage::buf_page::BufPage;
+use nom_sql::Literal;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 use tuple::tuple_desc::TupleDesc;
@@ -82,24 +80,25 @@ impl Rel {
         let rel = Rel{ rel_id, tuple_desc };
 
         // Create new data file
-        let buf_page = buf_mgr.new_buf(&BufKey::new(rel_id, 0))?;
-        let mut lock = buf_page.write().unwrap();
+        let meta_page = buf_mgr.new_buf(&BufKey::new(rel_id, 0))?;
+        let _first_page = buf_mgr.new_buf(&BufKey::new(rel_id, 1))?;
+        let mut lock = meta_page.write().unwrap();
 
         // Write num data pages
         {
-            let mut data: Vec<u8> = vec![];
-            LittleEndian::write_u32(&mut data, 0);
+            let mut data = vec![0u8; 4];
+            LittleEndian::write_u32(&mut data, 1);
             lock.write_tuple_data(&data, None)?;
         }
         // Write num attrs
         {
-            let mut data: Vec<u8> = vec![];
+            let mut data = vec![0u8; 4];
             LittleEndian::write_u32(&mut data, rel.tuple_desc.num_attrs());
             lock.write_tuple_data(&data, None)?;
         }
         // Write attr types
         for attr in rel.tuple_desc.attr_types.iter() {
-            let mut data: Vec<u8> = vec![];
+            let mut data = vec![0u8; 4];
             LittleEndian::write_u32(&mut data, *attr as u32);
             lock.write_tuple_data(&data, None)?;
         }
@@ -135,7 +134,7 @@ impl Rel {
             let new_page = buf_mgr.new_buf(
                 &BufKey::new(self.rel_id, (num_data_pages + 1) as u64))?;
 
-            let mut pages_data: Vec<u8> = vec![];
+            let mut pages_data = vec![0u8; 4];
             LittleEndian::write_u32(
                 &mut pages_data, (num_data_pages + 1) as u32);
             rel_lock.write_tuple_data(
@@ -152,14 +151,14 @@ impl Rel {
         &self,
         buf_mgr: &mut BufMgr,
         filter: Filter,
-        then: Then) -> Result<(), std::io::Error>
+        mut then: Then) -> Result<(), std::io::Error>
     where Filter: Fn(&[u8]) -> bool,
-          Then: Fn(&[u8]) {
+          Then: FnMut(&[u8]) {
         let rel_meta = buf_mgr.get_buf(&self.meta_buf_key())?;
         let rel_guard = rel_meta.read().unwrap();
         let num_data_pages = rel_data_pages!(self, rel_guard);
 
-        for page_idx in 1..num_data_pages {
+        for page_idx in 1..num_data_pages + 1 {
             let page = buf_mgr.get_buf(&BufKey::new(self.rel_id, page_idx as u64))?;
             let guard = page.read().unwrap();
             for tup in guard.iter() {
@@ -168,6 +167,15 @@ impl Rel {
         }
 
         Ok(())
+    }
+
+    pub fn data_to_strings(&self, data: &[u8]) -> Option<Vec<String>> {
+        self.tuple_desc.data_to_strings(data)
+    }
+
+    pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>)
+            -> Vec<Vec<u8>> {
+        self.tuple_desc.data_from_literal(inputs)
     }
 
     fn meta_buf_key(&self) -> BufKey {
