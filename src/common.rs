@@ -8,6 +8,7 @@ use utils;
 pub type ID = u64;
 
 pub static META_REL_ID: ID = 0;
+pub static TABLE_REL_ID: ID = 1;
 static CUR_ID_OFFSET: usize = 0;
 
 pub fn get_new_id(buf_mgr: &mut BufMgr) -> Result<ID, std::io::Error> {
@@ -22,6 +23,8 @@ pub fn get_new_id(buf_mgr: &mut BufMgr) -> Result<ID, std::io::Error> {
         let mut cursor = Cursor::new(&data);
         cursor.read_u64::<LittleEndian>()?
     };
+    // 0 and 1 are reserved
+    assert!(cur_id > 1);
 
     let new_id = cur_id + 1;
     let mut data: Vec<u8> = vec![];
