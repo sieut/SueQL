@@ -23,11 +23,9 @@ pub fn get_new_id(buf_mgr: &mut BufMgr) -> Result<ID, std::io::Error> {
         let mut cursor = Cursor::new(&data);
         cursor.read_u64::<LittleEndian>()?
     };
-    // 0 and 1 are reserved
-    assert!(cur_id > 1);
 
     let new_id = cur_id + 1;
-    let mut data: Vec<u8> = vec![];
+    let mut data = vec![0u8;8];
     LittleEndian::write_u64(&mut data, new_id);
     lock.write_tuple_data(&data[0..8], Some(&ptr))?;
 
