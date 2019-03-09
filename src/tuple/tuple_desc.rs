@@ -1,32 +1,47 @@
-extern crate num;
-use self::num::FromPrimitive;
-
 use data_type::DataType;
 use nom_sql::Literal;
 use tuple::TupleData;
 
 #[derive(Clone)]
 pub struct TupleDesc {
-    pub attr_types: Vec<DataType>,
+    attr_types: Vec<DataType>,
+    attr_names: Vec<String>,
 }
 
 impl TupleDesc {
-    pub fn new(attr_types: Vec<DataType>) -> TupleDesc {
+    pub fn new(
+            attr_types: Vec<DataType>,
+            attr_names: Vec<String>) -> TupleDesc {
         assert!(attr_types.len() < 10000);
-        TupleDesc { attr_types }
+        assert_eq!(attr_types.len(), attr_names.len());
+        TupleDesc { attr_types, attr_names }
     }
 
-    pub fn from_attr_ids(attr_ids: &Vec<u32>) -> Option<TupleDesc> {
-        assert!(attr_ids.len() < 10000);
+    pub fn from_data(data: &Vec<Vec<u8>>) -> Result<TupleDesc, std::io::Error> {
         let mut attr_types = vec![];
-        for id in attr_ids.iter() {
-            match DataType::from_u32(*id) {
-                Some(t) => { attr_types.push(t); },
-                None => return None
-            }
+        let mut attr_names = vec![];
+        for bytes in data.iter() {
+            let attr_type = DataType::from_data(&bytes)?;
+            let attr_name = DataType::VarChar.data_to_string(
+                &bytes[attr_type.id_len()..bytes.len()]).unwrap();
+            attr_types.push(attr_type);
+            attr_names.push(attr_name);
         }
 
-        Some(TupleDesc::new(attr_types))
+        Ok(TupleDesc::new(attr_types, attr_names))
+    }
+
+    pub fn to_data(&self) -> Vec<Vec<u8>> {
+        let mut result = vec![];
+        for i in 0..self.attr_types.len() {
+            let mut data = self.attr_types[i].to_data();
+            let mut name_data = DataType::VarChar.string_to_data(
+                &self.attr_names[i]).unwrap();
+            data.append(&mut name_data);
+            result.push(data);
+        }
+
+        result
     }
 
     pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>) -> Vec<TupleData> {
@@ -48,8 +63,8 @@ impl TupleDesc {
         let mut data = vec![];
         for (index, input) in inputs.iter().enumerate() {
             let data_type = self.attr_types.get(index).unwrap();
-            let mut bytes = data_type.string_to_bytes(&input).unwrap();
-            data.append(&mut bytes);
+            let mut col_data = data_type.string_to_data(&input).unwrap();
+            data.append(&mut col_data);
         }
 
         data
@@ -62,7 +77,7 @@ impl TupleDesc {
             let attr_size = attr.size(
                 Some(&bytes[bytes_used..bytes.len()])).unwrap();
             let slice = &bytes[bytes_used..bytes_used + attr_size];
-            match attr.bytes_to_string(slice) {
+            match attr.data_to_string(slice) {
                 Some(string) => result.push(string),
                 None => { return None; }
             };
@@ -92,5 +107,9 @@ impl TupleDesc {
 
     pub fn num_attrs(&self) -> u32 {
         self.attr_types.len() as u32
+    }
+
+    pub fn attr_names(&self) -> Vec<String> {
+        self.attr_names.clone()
     }
 }

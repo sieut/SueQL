@@ -1,3 +1,6 @@
+extern crate num;
+use self::num::FromPrimitive;
+
 use std::io::Cursor;
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use nom_sql::{Literal, SqlType};
@@ -12,6 +15,38 @@ enum_from_primitive!{
 }
 
 impl DataType {
+    pub fn from_data(data: &[u8]) -> Result<DataType, std::io::Error> {
+        use std::io::{Error, ErrorKind};
+
+        let mut cursor = Cursor::new(&data);
+        let id = cursor.read_u16::<LittleEndian>()?;
+        match DataType::from_u16(id) {
+            Some(t) => {
+                // NOTE: matching t because we might support
+                // types with argument in the future, eg. Char(len)
+                match t.clone() {
+                    DataType::Char | DataType::Integer | DataType::VarChar
+                        => Ok(t),
+                }
+            },
+            None => Err(Error::new(ErrorKind::InvalidData, "Invalid type ID"))
+        }
+    }
+
+    pub fn to_data(&self) -> Vec<u8> {
+        let mut data = vec![0u8; 2];
+        let id = *self as u16;
+        LittleEndian::write_u16(&mut data, id);
+        // NOTE when types with argument are supported, update this fn
+        data
+    }
+
+    pub fn id_len(&self) -> usize {
+        match self {
+            &DataType::Char | &DataType::Integer | &DataType::VarChar => 2,
+        }
+    }
+
     pub fn from_nom_type(nom_type: SqlType) -> Option<DataType> {
         match nom_type {
             SqlType::Char(len) => {
@@ -101,7 +136,7 @@ impl DataType {
         }
     }
 
-    pub fn string_to_bytes(&self, input: &str) -> Option<Vec<u8>> {
+    pub fn string_to_data(&self, input: &str) -> Option<Vec<u8>> {
         match self {
             &DataType::Char => {
                 if input.len() == 1 { Some(input.as_bytes().to_vec()) }
@@ -126,7 +161,7 @@ impl DataType {
         }
     }
 
-    pub fn bytes_to_string(&self, bytes: &[u8]) -> Option<String> {
+    pub fn data_to_string(&self, bytes: &[u8]) -> Option<String> {
         match self {
             &DataType::Char => {
                 if bytes.len() == self.size(None).unwrap() {

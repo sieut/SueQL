@@ -26,12 +26,16 @@ fn create_table(stmt: nom_sql::CreateTableStatement, buf_mgr: &mut BufMgr)
     use data_type::DataType;
     use tuple::tuple_desc::TupleDesc;
 
-    let types: Vec<DataType> = stmt.fields
+    let attr_types: Vec<DataType> = stmt.fields
         .iter()
         .map(|ref field|
              DataType::from_nom_type(field.sql_type.clone()).unwrap())
         .collect();
-    let tuple_desc = TupleDesc::new(types);
+    let attr_names: Vec<String> = stmt.fields
+        .iter()
+        .map(|ref field| field.column.name.clone())
+        .collect();
+    let tuple_desc = TupleDesc::new(attr_types, attr_names);
     Rel::new(tuple_desc, buf_mgr, Some(stmt.table.name))?;
     Ok(())
 }
@@ -41,6 +45,7 @@ fn select(stmt: nom_sql::SelectStatement, buf_mgr: &mut BufMgr)
     // Only SELECT * FROM single_table for now
     let table_id = get_table_id(stmt.tables[0].name.clone(), buf_mgr)?;
     let rel = Rel::load(table_id, buf_mgr)?;
+    println!("{:?}", rel.tuple_desc().attr_names());
     rel.scan(
         buf_mgr,
         |_| { true },

@@ -56,5 +56,7 @@ fn init_db(buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
 }
 
 fn table_rel_desc() -> TupleDesc {
-    TupleDesc::new(vec![DataType::VarChar, DataType::Integer])
+    TupleDesc::new(
+        vec![DataType::VarChar, DataType::Integer],
+        vec![String::from("table_name"), String::from("rel_id")])
 }

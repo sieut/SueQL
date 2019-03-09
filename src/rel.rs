@@ -52,14 +52,10 @@ impl Rel {
             cursor.read_u32::<LittleEndian>()?
         };
 
-        let mut attr_ids = vec![];
+        let mut attr_data = vec![];
         for _ in 0..num_attr {
             match iter.next() {
-                Some(data) => {
-                    utils::assert_data_len(&data, 4)?;
-                    let mut cursor = Cursor::new(&data);
-                    attr_ids.push(cursor.read_u32::<LittleEndian>()?);
-                },
+                Some(data) => { attr_data.push(data.to_vec()); },
                 None => { return Err(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             "Missing attr types")); }
@@ -68,7 +64,7 @@ impl Rel {
 
         Ok(Rel {
             rel_id,
-            tuple_desc: TupleDesc::from_attr_ids(&attr_ids).unwrap(),
+            tuple_desc: TupleDesc::from_data(&attr_data)?,
         })
     }
 
@@ -96,11 +92,12 @@ impl Rel {
             LittleEndian::write_u32(&mut data, rel.tuple_desc.num_attrs());
             lock.write_tuple_data(&data, None)?;
         }
-        // Write attr types
-        for attr in rel.tuple_desc.attr_types.iter() {
-            let mut data = vec![0u8; 4];
-            LittleEndian::write_u32(&mut data, *attr as u32);
-            lock.write_tuple_data(&data, None)?;
+        // Write tuple desc
+        {
+            let attrs_data = rel.tuple_desc.to_data();
+            for tup in attrs_data.iter() {
+                lock.write_tuple_data(&tup, None)?;
+            }
         }
 
         // Add an entry to the table info rel
@@ -176,6 +173,10 @@ impl Rel {
     pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>)
             -> Vec<Vec<u8>> {
         self.tuple_desc.data_from_literal(inputs)
+    }
+
+    pub fn tuple_desc(&self) -> TupleDesc {
+        self.tuple_desc.clone()
     }
 
     fn meta_buf_key(&self) -> BufKey {
