@@ -3,18 +3,13 @@ use nom_sql;
 use nom_sql::SqlQuery;
 use rel::Rel;
 use storage::buf_mgr::BufMgr;
+use tuple;
 
 pub fn exec(query: SqlQuery, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
     match query {
-        SqlQuery::CreateTable(stmt) => {
-            create_table(stmt, buf_mgr)
-        },
-        SqlQuery::Insert(stmt) => {
-            insert(stmt, buf_mgr)
-        },
-        SqlQuery::Select(stmt) => {
-            select(stmt, buf_mgr)
-        },
+        SqlQuery::CreateTable(stmt) => { create_table(stmt, buf_mgr) },
+        SqlQuery::Insert(stmt) => { insert(stmt, buf_mgr) },
+        SqlQuery::Select(stmt) => { select(stmt, buf_mgr) },
         _ => {
             Ok(())
         }
@@ -42,14 +37,19 @@ fn create_table(stmt: nom_sql::CreateTableStatement, buf_mgr: &mut BufMgr)
 
 fn select(stmt: nom_sql::SelectStatement, buf_mgr: &mut BufMgr)
         -> Result<(), std::io::Error> {
-    // Only SELECT * FROM single_table for now
+    // Only Select from 1 table rn
     let table_id = get_table_id(stmt.tables[0].name.clone(), buf_mgr)?;
     let rel = Rel::load(table_id, buf_mgr)?;
-    println!("{:?}", rel.tuple_desc().attr_names());
+    let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
+
     rel.scan(
         buf_mgr,
         |_| { true },
-        |data| { println!("{:?}", rel.data_to_strings(data).unwrap()) })?;
+        |data| {
+            println!(
+                "{:?}",
+                rel.data_to_strings(data, Some(fields.clone())).unwrap())
+        })?;
     Ok(())
 }
 
@@ -71,9 +71,32 @@ fn get_table_id(name: String, buf_mgr: &mut BufMgr)
     rel.scan(
         buf_mgr,
         |data| {
-            let vals = rel.data_to_strings(data).unwrap();
+            let vals = rel.data_to_strings(data, None).unwrap();
             vals[0].clone() == name
         },
-        |data| { id = rel.data_to_strings(data).unwrap()[1].clone(); })?;
+        |data| { id = rel.data_to_strings(data, None).unwrap()[1].clone(); })?;
     Ok(id.parse::<common::ID>().unwrap())
+}
+
+fn build_select_fields(
+        fields: &Vec<nom_sql::FieldDefinitionExpression>,
+        tuple_desc: tuple::tuple_desc::TupleDesc) -> Vec<usize> {
+    use nom_sql::FieldDefinitionExpression;
+
+    let mut result = vec![];
+    for field in fields.iter() {
+        match field {
+            FieldDefinitionExpression::All => {
+                result.append(
+                    &mut (0..tuple_desc.num_attrs() as usize).collect());
+            },
+            FieldDefinitionExpression::Col(column) => {
+                result.push(
+                    tuple_desc.attr_index(&column.name).unwrap());
+            },
+            _ => {}
+        }
+    }
+
+    result
 }

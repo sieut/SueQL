@@ -166,8 +166,11 @@ impl Rel {
         Ok(())
     }
 
-    pub fn data_to_strings(&self, data: &[u8]) -> Option<Vec<String>> {
-        self.tuple_desc.data_to_strings(data)
+    pub fn data_to_strings(
+            &self,
+            data: &[u8],
+            filter_indices: Option<Vec<usize>>) -> Option<Vec<String>> {
+        self.tuple_desc.data_to_strings(data, filter_indices)
     }
 
     pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>)

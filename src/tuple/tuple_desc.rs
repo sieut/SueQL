@@ -70,20 +70,27 @@ impl TupleDesc {
         data
     }
 
-    pub fn data_to_strings(&self, bytes: &[u8]) -> Option<Vec<String>> {
-        let mut result = vec![];
+    pub fn data_to_strings(
+            &self,
+            bytes: &[u8],
+            filter_indices: Option<Vec<usize>>) -> Option<Vec<String>> {
+        let mut full_data = vec![];
         let mut bytes_used = 0;
         for attr in self.attr_types.iter() {
             let attr_size = attr.size(
                 Some(&bytes[bytes_used..bytes.len()])).unwrap();
             let slice = &bytes[bytes_used..bytes_used + attr_size];
             match attr.data_to_string(slice) {
-                Some(string) => result.push(string),
+                Some(string) => full_data.push(string),
                 None => { return None; }
             };
             bytes_used += attr.size(Some(slice)).unwrap();
         }
 
+        let result = match filter_indices {
+            Some(vec) => vec.iter().map(|i| full_data[*i].clone()).collect(),
+            None => full_data
+        };
         Some(result)
     }
 
@@ -111,5 +118,9 @@ impl TupleDesc {
 
     pub fn attr_names(&self) -> Vec<String> {
         self.attr_names.clone()
+    }
+
+    pub fn attr_index(&self, name: &str) -> Option<usize> {
+        self.attr_names.iter().position(|attr_name| attr_name == name)
     }
 }
