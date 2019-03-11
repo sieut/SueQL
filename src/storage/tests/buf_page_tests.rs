@@ -1,5 +1,4 @@
 use std::io::Cursor;
-use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
 use storage::PAGE_SIZE;
 use storage::buf_page::BufPage;
@@ -8,26 +7,22 @@ use tuple::tuple_ptr::TuplePtr;
 
 #[test]
 fn test_write_new_tuple() {
-    let mut buffer: [u8; PAGE_SIZE] = [0; PAGE_SIZE];
-    LittleEndian::write_u32(&mut buffer[0..4], PAGE_SIZE as u32);
-    LittleEndian::write_u32(&mut buffer[4..8], 8);
+    use storage::buf_page::HEADER_SIZE;
 
-    let mut buf_page = BufPage::load_from(
-        &buffer, &BufKey::new(0, 0)).unwrap();
-
+    let mut buf_page = new_page();
     let test_data = [5; 16];
     let buf_offset = buf_page.write_tuple_data(&test_data, None).unwrap();
     assert_eq!(buf_offset, 0);
 
     let mut reader = Cursor::new(&buf_page.buf()[0..12]);
     // upper_ptr
-    assert_eq!(reader.read_u32::<LittleEndian>().unwrap() as usize,
+    assert_eq!(reader.read_u16::<LittleEndian>().unwrap() as usize,
                PAGE_SIZE - 16);
     // lower_ptr
-    assert_eq!(reader.read_u32::<LittleEndian>().unwrap() as usize,
-               8 + 4);
+    assert_eq!(reader.read_u16::<LittleEndian>().unwrap() as usize,
+               HEADER_SIZE + 4);
     // tuple_ptr
-    assert_eq!(reader.read_u32::<LittleEndian>().unwrap() as usize,
+    assert_eq!(reader.read_u16::<LittleEndian>().unwrap() as usize,
                PAGE_SIZE - 16);
     // tuple_data
     for byte in buf_page.buf()[(PAGE_SIZE - 16) as usize
@@ -39,8 +34,8 @@ fn test_write_new_tuple() {
 #[test]
 fn test_get_tuple_data() {
     let mut buf_page = new_page();
-    buf_page.write_tuple_data(&[2u8; 8], None);
-    buf_page.write_tuple_data(&[1u8; 16], None);
+    buf_page.write_tuple_data(&[2u8; 8], None).unwrap();
+    buf_page.write_tuple_data(&[1u8; 16], None).unwrap();
 
     let invalid_tuple_ptr = TuplePtr::new(BufKey::new(0, 1), 4);
     assert!(buf_page.get_tuple_data(&invalid_tuple_ptr).is_err());

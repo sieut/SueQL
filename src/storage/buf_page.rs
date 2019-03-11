@@ -6,9 +6,9 @@ use storage::{PAGE_SIZE};
 use storage::buf_key::BufKey;
 use tuple::tuple_ptr::TuplePtr;
 
-pub const HEADER_SIZE: usize = 8;
-const UPPER_PTR_RANGE: std::ops::Range<usize> = (0..4);
-const LOWER_PTR_RANGE: std::ops::Range<usize> = (4..8);
+pub const HEADER_SIZE: usize = 4;
+const UPPER_PTR_RANGE: std::ops::Range<usize> = (0..2);
+const LOWER_PTR_RANGE: std::ops::Range<usize> = (2..4);
 
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
@@ -26,16 +26,16 @@ pub type PagePtr = usize;
 impl BufPage {
     pub fn default_buf() -> Vec<u8> {
         let mut vec = vec![0 as u8; PAGE_SIZE];
-        LittleEndian::write_u32(&mut vec[UPPER_PTR_RANGE], PAGE_SIZE as u32);
-        LittleEndian::write_u32(&mut vec[LOWER_PTR_RANGE], HEADER_SIZE as u32);
+        LittleEndian::write_u16(&mut vec[UPPER_PTR_RANGE], PAGE_SIZE as u16);
+        LittleEndian::write_u16(&mut vec[LOWER_PTR_RANGE], HEADER_SIZE as u16);
         vec
     }
 
     pub fn load_from(buffer: &[u8; PAGE_SIZE as usize], buf_key: &BufKey)
             -> Result<BufPage, std::io::Error> {
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
-        let upper_ptr = reader.read_u32::<LittleEndian>()? as usize;
-        let lower_ptr = reader.read_u32::<LittleEndian>()? as usize;
+        let upper_ptr = reader.read_u16::<LittleEndian>()? as usize;
+        let lower_ptr = reader.read_u16::<LittleEndian>()? as usize;
 
         Ok(BufPage {
             buf: buffer.to_vec(),
@@ -65,7 +65,7 @@ impl BufPage {
                 let mut reader = Cursor::new(
                     &self.buf[BufPage::offset_to_ptr(ptr.buf_offset())
                         ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))]);
-                reader.read_u32::<LittleEndian>()? as usize
+                reader.read_u16::<LittleEndian>()? as usize
             },
             None => {
                 // TODO Handle this case
@@ -75,23 +75,26 @@ impl BufPage {
 
                 ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
 
-                let new_ptr = self.upper_ptr - tuple_data.len();
-                LittleEndian::write_u32(
-                    &mut self.buf[self.lower_ptr
-                        ..(self.lower_ptr + 4)],
-                    new_ptr as u32);
+                let new_start = self.upper_ptr - tuple_data.len();
+                let new_end = self.upper_ptr;
+                LittleEndian::write_u16(
+                    &mut self.buf[self.lower_ptr..self.lower_ptr + 2],
+                    new_start as u16);
+                LittleEndian::write_u16(
+                    &mut self.buf[self.lower_ptr + 2..self.lower_ptr + 4],
+                    new_end as u16);
 
                 self.lower_ptr += 4;
-                LittleEndian::write_u32(
+                LittleEndian::write_u16(
                     &mut self.buf[LOWER_PTR_RANGE],
-                    self.lower_ptr as u32);
+                    self.lower_ptr as u16);
 
                 self.upper_ptr -= tuple_data.len();
-                LittleEndian::write_u32(
+                LittleEndian::write_u16(
                     &mut self.buf[UPPER_PTR_RANGE],
-                    self.upper_ptr as u32);
+                    self.upper_ptr as u16);
 
-                new_ptr
+                new_start
             }
         };
 
@@ -107,17 +110,8 @@ impl BufPage {
         let mut reader = Cursor::new(
             &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
             ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)]);
-        let start = reader.read_u32::<LittleEndian>()? as usize;
-
-        let end = if tuple_ptr.buf_offset() > 0 {
-            let mut reader = Cursor::new(
-                &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset() - 1)
-                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset())]);
-            reader.read_u32::<LittleEndian>()? as usize
-        }
-        else {
-            PAGE_SIZE
-        };
+        let start = reader.read_u16::<LittleEndian>()? as usize;
+        let end = reader.read_u16::<LittleEndian>()? as usize;
 
         Ok(&self.buf[start..end])
     }

@@ -28,7 +28,7 @@ fn test_bufmgr_store() {
         let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
         // Change values in buf_page
         let mut lock = buf_page.write().unwrap();
-        lock.write_tuple_data(&vec![1, 1, 1, 1], None);
+        lock.write_tuple_data(&vec![1, 1, 1, 1], None).unwrap();
     }
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(2, 0), None).unwrap();
@@ -110,7 +110,7 @@ fn test_bufmgr_ref() {
     let mut clone = buf_mgr.clone();
 
     let buf = buf_mgr.get_buf(&BufKey::new(5, 0)).unwrap();
-    let buf_clone = clone.get_buf(&BufKey::new(5, 0)).unwrap();
+    let _buf_clone = clone.get_buf(&BufKey::new(5, 0)).unwrap();
     assert_eq!(buf.ref_count(), 3);
     teardown_bufmgr(data_file);
 }
