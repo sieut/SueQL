@@ -47,7 +47,7 @@ fn init_db(buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
     }
     else {
         let meta = buf_mgr.new_buf(&meta_key)?;
-        meta.write().unwrap().write_tuple_data(&[0u8; 8], None)?;
+        meta.write().unwrap().write_tuple_data(&[0u8; 4], None)?;
 
         Rel::new(table_rel_desc(), buf_mgr, None)?;
     }
@@ -57,6 +57,6 @@ fn init_db(buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
 
 fn table_rel_desc() -> TupleDesc {
     TupleDesc::new(
-        vec![DataType::VarChar, DataType::Integer],
+        vec![DataType::VarChar, DataType::U32],
         vec![String::from("table_name"), String::from("rel_id")])
 }
