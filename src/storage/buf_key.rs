@@ -8,7 +8,7 @@ pub struct BufKey {
 }
 
 impl BufKey {
-    pub fn new(file_id: ID, offset: u64) -> BufKey {
+    pub const fn new(file_id: ID, offset: u64) -> BufKey {
         BufKey{ file_id, offset }
     }
 

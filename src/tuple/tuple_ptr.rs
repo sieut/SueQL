@@ -9,7 +9,7 @@ pub struct TuplePtr {
 }
 
 impl TuplePtr {
-    pub fn new(buf_key: BufKey, buf_offset: usize) -> TuplePtr {
+    pub const fn new(buf_key: BufKey, buf_offset: usize) -> TuplePtr {
         TuplePtr { buf_key, buf_offset }
     }
 
