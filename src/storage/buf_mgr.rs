@@ -27,7 +27,7 @@ macro_rules! remove {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TableItem {
     page: Arc<RwLock<BufPage>>,
     info: Arc<RwLock<BufInfo>>,
@@ -85,6 +85,7 @@ impl PartialEq for TableItem {
 
 impl Eq for TableItem {}
 
+#[derive(Debug)]
 pub struct BufInfo {
     ref_bit: bool,
     dirty: bool,
@@ -294,5 +295,11 @@ impl BufMgr {
         }
 
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for BufMgr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "BufMgr {{ size: {} }}", self.buf_table_r.len())
     }
 }

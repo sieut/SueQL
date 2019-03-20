@@ -1,7 +1,7 @@
 use common::{ID};
 use storage::{PAGE_SIZE};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct BufKey {
     file_id: ID,
     offset: u64,
