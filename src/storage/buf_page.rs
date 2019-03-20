@@ -74,9 +74,10 @@ impl BufPage {
                 reader.read_u16::<LittleEndian>()? as usize
             },
             None => {
-                // TODO Handle this case
                 if self.available_data_space() < tuple_data.len() {
-                    panic!("Not enough space in page");
+                    use std::io::{Error, ErrorKind};
+                    return Err(Error::new(ErrorKind::Other,
+                                          "Not enough space for tuple"));
                 }
 
                 ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
