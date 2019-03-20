@@ -2,19 +2,22 @@ use std::io::Cursor;
 use std::iter::Iterator;
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
+use log::LSN;
 use storage::{PAGE_SIZE};
 use storage::buf_key::BufKey;
 use tuple::tuple_ptr::TuplePtr;
 
-pub const HEADER_SIZE: usize = 4;
-const UPPER_PTR_RANGE: std::ops::Range<usize> = (0..2);
-const LOWER_PTR_RANGE: std::ops::Range<usize> = (2..4);
+pub const HEADER_SIZE: usize = 8;
+const LSN_RANGE: std::ops::Range<usize> = (0..4);
+const UPPER_PTR_RANGE: std::ops::Range<usize> = (4..6);
+const LOWER_PTR_RANGE: std::ops::Range<usize> = (6..8);
 
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
 pub struct BufPage {
     buf: Vec<u8>,
     // Values in page's header
+    lsn: LSN,
     upper_ptr: PagePtr,
     lower_ptr: PagePtr,
     // BufKey for assertions
@@ -26,6 +29,7 @@ pub type PagePtr = usize;
 impl BufPage {
     pub fn default_buf() -> Vec<u8> {
         let mut vec = vec![0 as u8; PAGE_SIZE];
+        LittleEndian::write_u32(&mut vec[LSN_RANGE], 0);
         LittleEndian::write_u16(&mut vec[UPPER_PTR_RANGE], PAGE_SIZE as u16);
         LittleEndian::write_u16(&mut vec[LOWER_PTR_RANGE], HEADER_SIZE as u16);
         vec
@@ -34,11 +38,13 @@ impl BufPage {
     pub fn load_from(buffer: &[u8; PAGE_SIZE as usize], buf_key: &BufKey)
             -> Result<BufPage, std::io::Error> {
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
-        let upper_ptr = reader.read_u16::<LittleEndian>()? as usize;
-        let lower_ptr = reader.read_u16::<LittleEndian>()? as usize;
+        let lsn = reader.read_u32::<LittleEndian>()?;
+        let upper_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;
+        let lower_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;
 
         Ok(BufPage {
             buf: buffer.to_vec(),
+            lsn,
             upper_ptr,
             lower_ptr,
             buf_key: buf_key.clone(),
@@ -195,5 +201,16 @@ impl<'a> Iterator for Iter<'a> {
 
     fn count(self) -> usize {
         self.buf_page.tuple_count()
+    }
+}
+
+impl std::fmt::Debug for BufPage {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "BufPage {{
+               lsn: {},
+               upper_ptr: {},
+               lower_ptr: {},
+               buf_key: {:?}
+               }}", self.lsn, self.upper_ptr, self.lower_ptr, self.buf_key)
     }
 }

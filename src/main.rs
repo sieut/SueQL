@@ -10,6 +10,7 @@ mod common;
 mod data_type;
 mod db_state;
 mod exec;
+mod log;
 mod storage;
 mod tuple;
 mod rel;
@@ -18,7 +19,7 @@ mod utils;
 use db_state::{DbState, DbSettings};
 
 fn main() {
-    let db_state = DbState::start_db(DbSettings::default()).unwrap();
+    let mut db_state = DbState::start_db(DbSettings::default()).unwrap();
 
     let mut query = String::from("");
     loop {
@@ -44,7 +45,10 @@ fn main() {
                     query.clear();
                 }
             },
-            None => { break; }
+            None => {
+                db_state.shutdown().unwrap();
+                break;
+            }
         };
     }
 }

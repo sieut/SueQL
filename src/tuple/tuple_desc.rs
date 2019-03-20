@@ -9,12 +9,16 @@ pub struct TupleDesc {
 }
 
 impl TupleDesc {
-    pub fn new(
-            attr_types: Vec<DataType>,
-            attr_names: Vec<String>) -> TupleDesc {
+    pub fn new<S>(
+        attr_types: Vec<DataType>,
+        attr_names: Vec<S>) -> TupleDesc
+    where S: Into<String> {
         assert!(attr_types.len() < 10000);
         assert_eq!(attr_types.len(), attr_names.len());
-        TupleDesc { attr_types, attr_names }
+        TupleDesc {
+            attr_types,
+            attr_names: attr_names.into_iter().map(|name| name.into()).collect()
+        }
     }
 
     pub fn from_data(data: &Vec<Vec<u8>>) -> Result<TupleDesc, std::io::Error> {

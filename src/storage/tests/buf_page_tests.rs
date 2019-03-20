@@ -14,7 +14,7 @@ fn test_write_new_tuple() {
     let buf_offset = buf_page.write_tuple_data(&test_data, None).unwrap();
     assert_eq!(buf_offset, 0);
 
-    let mut reader = Cursor::new(&buf_page.buf()[0..12]);
+    let mut reader = Cursor::new(&buf_page.buf()[4..10]);
     // upper_ptr
     assert_eq!(reader.read_u16::<LittleEndian>().unwrap() as usize,
                PAGE_SIZE - 16);
