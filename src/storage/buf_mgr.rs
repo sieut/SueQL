@@ -113,10 +113,8 @@ impl BufMgr {
                             },
         };
 
-        let persister = Persister { buf_mgr: mgr.clone() };
-        std::thread::spawn(move || {
-            persister.persist_loop();
-        });
+        let clone = mgr.clone();
+        std::thread::spawn(move || { clone.persist_loop(); });
 
         mgr
     }
@@ -269,29 +267,32 @@ impl BufMgr {
         // and calling get_item will create a ref
         self.get_item(key).unwrap().ref_count() - 3
     }
-}
 
-struct Persister {
-    buf_mgr: BufMgr,
-}
-
-impl Persister {
-    fn persist_loop(&self) {
+    fn persist_loop(mut self) {
         use std::{thread, time};
         loop {
             thread::sleep(time::Duration::from_millis(200));
-            let keys = self.buf_mgr.evict_queue.lock().unwrap().clone();
-            for it in keys.iter() {
-                match self.buf_mgr.store_buf(&*it, None) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        match e.kind() {
-                            io::ErrorKind::NotFound => {},
-                            _ => panic!("Persister failed")
-                        }
+            self.persist().unwrap();
+            if let Err(e) = self.persist() {
+                panic!("Persist failed\n Error: {}", e);
+            }
+        }
+    }
+
+    pub fn persist(&mut self) -> Result<(), std::io::Error> {
+        let keys = self.evict_queue.lock().unwrap().clone();
+        for it in keys.iter() {
+            match self.store_buf(&*it, None) {
+                Ok(_) => {},
+                Err(e) => {
+                    match e.kind() {
+                        io::ErrorKind::NotFound => {},
+                        _ => return Err(e)
                     }
                 }
             }
         }
+
+        Ok(())
     }
 }
