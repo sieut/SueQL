@@ -1,7 +1,5 @@
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use common::ID;
-use std::io::Cursor;
-use storage::PAGE_SIZE;
+use storage::{Storable, PAGE_SIZE};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct BufKey {
@@ -23,12 +21,28 @@ impl BufKey {
     }
 }
 
-impl std::convert::TryFrom<&mut Cursor<&[u8]>> for BufKey {
-    type Error = std::io::Error;
+impl Storable for BufKey {
+    fn size() -> usize {
+        std::mem::size_of::<ID>() + std::mem::size_of::<u64>()
+    }
 
-    fn try_from(cursor: &mut Cursor<&[u8]>) -> Result<Self, Self::Error> {
-        let file_id = cursor.read_u32::<LittleEndian>()?;
-        let offset = cursor.read_u64::<LittleEndian>()?;
-        Ok(BufKey { file_id, offset })
+    fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
+        use byteorder::{LittleEndian, ReadBytesExt};
+        use std::io::Cursor;
+
+        let mut cursor = Cursor::new(bytes);
+        let key = BufKey::new(
+            cursor.read_u32::<LittleEndian>()?,
+            cursor.read_u64::<LittleEndian>()?,
+        );
+        let leftover_data = Self::leftover_data(cursor);
+        Ok((key, leftover_data))
+    }
+
+    fn to_data(&self) -> Vec<u8> {
+        let mut data = vec![];
+        data.append(&mut self.file_id.to_data());
+        data.append(&mut self.offset.to_data());
+        data
     }
 }
