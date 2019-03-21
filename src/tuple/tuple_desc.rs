@@ -84,7 +84,9 @@ impl TupleDesc {
         let mut full_data = vec![];
         let mut bytes_used = 0;
         for attr in self.attr_types.iter() {
-            let attr_size = attr.data_size(Some(&bytes[bytes_used..bytes.len()])).unwrap();
+            let attr_size = attr
+                .data_size(Some(&bytes[bytes_used..bytes.len()]))
+                .unwrap();
             let slice = &bytes[bytes_used..bytes_used + attr_size];
             match attr.data_to_string(slice) {
                 Some(string) => full_data.push(string),
