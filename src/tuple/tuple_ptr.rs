@@ -5,12 +5,15 @@ use storage::buf_page::PagePtr;
 ///     * buf_offset: starting from 0
 pub struct TuplePtr {
     buf_key: BufKey,
-    buf_offset: usize
+    buf_offset: usize,
 }
 
 impl TuplePtr {
     pub const fn new(buf_key: BufKey, buf_offset: usize) -> TuplePtr {
-        TuplePtr { buf_key, buf_offset }
+        TuplePtr {
+            buf_key,
+            buf_offset,
+        }
     }
 
     pub fn buf_key(&self) -> BufKey {

@@ -2,7 +2,8 @@
 
 extern crate byteorder;
 extern crate evmap;
-#[macro_use] extern crate enum_primitive;
+#[macro_use]
+extern crate enum_primitive;
 extern crate linenoise;
 extern crate nom_sql;
 
@@ -11,20 +12,19 @@ mod data_type;
 mod db_state;
 mod exec;
 mod log;
+mod rel;
 mod storage;
 mod tuple;
-mod rel;
 mod utils;
 
-use db_state::{DbState, DbSettings};
+use db_state::{DbSettings, DbState};
 
 fn main() {
     let mut db_state = DbState::start_db(DbSettings::default()).unwrap();
 
     let mut query = String::from("");
     loop {
-        let prompt = if query.len() == 0 { "> " }
-                     else { "... " };
+        let prompt = if query.len() == 0 { "> " } else { "... " };
         let input = linenoise::input(prompt);
 
         match input {
@@ -37,14 +37,14 @@ fn main() {
                             std::thread::spawn(move || {
                                 exec::exec(query, &mut state.buf_mgr).unwrap();
                             });
-                        },
+                        }
                         Err(e) => {
                             println!("{}", e);
                         }
                     }
                     query.clear();
                 }
-            },
+            }
             None => {
                 db_state.shutdown().unwrap();
                 break;

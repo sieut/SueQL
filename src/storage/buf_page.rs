@@ -1,10 +1,10 @@
-use std::io::Cursor;
-use std::iter::Iterator;
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
 use log::LSN;
-use storage::{PAGE_SIZE};
+use std::io::Cursor;
+use std::iter::Iterator;
 use storage::buf_key::BufKey;
+use storage::PAGE_SIZE;
 use tuple::tuple_ptr::TuplePtr;
 
 pub const HEADER_SIZE: usize = 8;
@@ -35,8 +35,10 @@ impl BufPage {
         vec
     }
 
-    pub fn load_from(buffer: &[u8; PAGE_SIZE as usize], buf_key: &BufKey)
-            -> Result<BufPage, std::io::Error> {
+    pub fn load_from(
+        buffer: &[u8; PAGE_SIZE as usize],
+        buf_key: &BufKey,
+    ) -> Result<BufPage, std::io::Error> {
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
         let lsn = reader.read_u32::<LittleEndian>()?;
         let upper_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;
@@ -51,10 +53,11 @@ impl BufPage {
         })
     }
 
-    pub fn write_tuple_data(&mut self,
-                            tuple_data: &[u8],
-                            tuple_ptr: Option<&TuplePtr>)
-            -> Result<PagePtr, std::io::Error> {
+    pub fn write_tuple_data(
+        &mut self,
+        tuple_data: &[u8],
+        tuple_ptr: Option<&TuplePtr>,
+    ) -> Result<PagePtr, std::io::Error> {
         let ret_offset;
 
         let page_ptr: PagePtr = match tuple_ptr {
@@ -70,14 +73,14 @@ impl BufPage {
 
                 let mut reader = Cursor::new(
                     &self.buf[BufPage::offset_to_ptr(ptr.buf_offset())
-                        ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))]);
+                        ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))],
+                );
                 reader.read_u16::<LittleEndian>()? as usize
-            },
+            }
             None => {
                 if self.available_data_space() < tuple_data.len() {
                     use std::io::{Error, ErrorKind};
-                    return Err(Error::new(ErrorKind::Other,
-                                          "Not enough space for tuple"));
+                    return Err(Error::new(ErrorKind::Other, "Not enough space for tuple"));
                 }
 
                 ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
@@ -86,37 +89,34 @@ impl BufPage {
                 let new_end = self.upper_ptr;
                 LittleEndian::write_u16(
                     &mut self.buf[self.lower_ptr..self.lower_ptr + 2],
-                    new_start as u16);
+                    new_start as u16,
+                );
                 LittleEndian::write_u16(
                     &mut self.buf[self.lower_ptr + 2..self.lower_ptr + 4],
-                    new_end as u16);
+                    new_end as u16,
+                );
 
                 self.lower_ptr += 4;
-                LittleEndian::write_u16(
-                    &mut self.buf[LOWER_PTR_RANGE],
-                    self.lower_ptr as u16);
+                LittleEndian::write_u16(&mut self.buf[LOWER_PTR_RANGE], self.lower_ptr as u16);
 
                 self.upper_ptr -= tuple_data.len();
-                LittleEndian::write_u16(
-                    &mut self.buf[UPPER_PTR_RANGE],
-                    self.upper_ptr as u16);
+                LittleEndian::write_u16(&mut self.buf[UPPER_PTR_RANGE], self.upper_ptr as u16);
 
                 new_start
             }
         };
 
-        self.buf[page_ptr..page_ptr + tuple_data.len()]
-            .clone_from_slice(tuple_data);
+        self.buf[page_ptr..page_ptr + tuple_data.len()].clone_from_slice(tuple_data);
 
         Ok(ret_offset)
     }
 
-    pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr)
-            -> Result<&[u8], std::io::Error> {
+    pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr) -> Result<&[u8], std::io::Error> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
         let mut reader = Cursor::new(
             &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
-            ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)]);
+                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)],
+        );
         let start = reader.read_u16::<LittleEndian>()? as usize;
         let end = reader.read_u16::<LittleEndian>()? as usize;
 
@@ -154,24 +154,23 @@ impl BufPage {
         (self.lower_ptr - HEADER_SIZE) / 4
     }
 
-    fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr)
-            -> Result<(), std::io::Error> {
+    fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr) -> Result<(), std::io::Error> {
         if self.buf_key != tuple_ptr.buf_key() {
-            Err(std::io::Error::new(std::io::ErrorKind::InvalidInput,
-                                    "Invalid buf_key"))
-        }
-        else if tuple_ptr.buf_offset() >= self.tuple_count() {
             Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    format!("Invalid buf_offset {}", tuple_ptr.buf_offset())))
-        }
-        else {
+                std::io::ErrorKind::InvalidInput,
+                "Invalid buf_key",
+            ))
+        } else if tuple_ptr.buf_offset() >= self.tuple_count() {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("Invalid buf_offset {}", tuple_ptr.buf_offset()),
+            ))
+        } else {
             Ok(())
         }
     }
 
-    fn tuple_data_len(&self, tuple_ptr: &TuplePtr)
-            -> Result<usize, std::io::Error> {
+    fn tuple_data_len(&self, tuple_ptr: &TuplePtr) -> Result<usize, std::io::Error> {
         let tuple_data = self.get_tuple_data(tuple_ptr)?;
         Ok(tuple_data.len())
     }
@@ -195,8 +194,8 @@ impl<'a> Iterator for Iter<'a> {
             Ok(data) => {
                 self.tuple_ptr.inc_buf_offset();
                 Some(data)
-            },
-            Err(_) => None
+            }
+            Err(_) => None,
         }
     }
 
@@ -207,11 +206,15 @@ impl<'a> Iterator for Iter<'a> {
 
 impl std::fmt::Debug for BufPage {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "BufPage {{
+        write!(
+            f,
+            "BufPage {{
                lsn: {},
                upper_ptr: {},
                lower_ptr: {},
                buf_key: {:?}
-               }}", self.lsn, self.upper_ptr, self.lower_ptr, self.buf_key)
+               }}",
+            self.lsn, self.upper_ptr, self.lower_ptr, self.buf_key
+        )
     }
 }

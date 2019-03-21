@@ -1,10 +1,10 @@
 extern crate num;
 use self::num::FromPrimitive;
 
-use std::fs;
 use common;
 use data_type::DataType;
 use rel::Rel;
+use std::fs;
 use storage::buf_mgr::BufMgr;
 use tuple::tuple_desc::TupleDesc;
 
@@ -39,8 +39,7 @@ impl DbState {
         if fs::metadata(&common::META_BUF_KEY.to_filename()).is_ok() {
             buf_mgr.get_buf(&common::META_BUF_KEY)?;
             buf_mgr.get_buf(&common::TABLE_BUF_KEY)?;
-        }
-        else {
+        } else {
             {
                 let meta = buf_mgr.new_buf(&common::META_BUF_KEY)?;
                 let mut guard = meta.write().unwrap();
@@ -58,7 +57,6 @@ impl DbState {
 
         Ok(())
     }
-
 }
 
 #[derive(Clone, Debug)]
@@ -68,13 +66,11 @@ pub struct DbSettings {
 
 impl DbSettings {
     pub fn default() -> DbSettings {
-        DbSettings {
-            buf_mgr_size: None
-        }
+        DbSettings { buf_mgr_size: None }
     }
 }
 
-enum_from_primitive!{
+enum_from_primitive! {
     #[derive(Debug, Copy, Clone)]
     pub enum State {
         Up,
@@ -98,5 +94,6 @@ impl From<&[u8]> for State {
 fn table_rel_desc() -> TupleDesc {
     TupleDesc::new(
         vec![DataType::VarChar, DataType::U32],
-        vec![String::from("table_name"), String::from("rel_id")])
+        vec![String::from("table_name"), String::from("rel_id")],
+    )
 }

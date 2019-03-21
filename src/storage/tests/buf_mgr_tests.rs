@@ -1,9 +1,9 @@
-use std::fs::{File, remove_file};
-use std::io::{Write};
-use storage::PAGE_SIZE;
+use std::fs::{remove_file, File};
+use std::io::Write;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
 use storage::buf_page::{BufPage, HEADER_SIZE};
+use storage::PAGE_SIZE;
 
 #[test]
 fn test_bufmgr_get() {
@@ -40,7 +40,7 @@ fn test_bufmgr_store() {
     let lock = buf_page.read().unwrap();
     assert_eq!(lock.upper_ptr(), PAGE_SIZE - 4);
     assert_eq!(lock.lower_ptr(), HEADER_SIZE + 4);
-    assert_eq!(lock.iter().next().unwrap().to_vec(), vec![1,1,1,1]);
+    assert_eq!(lock.iter().next().unwrap().to_vec(), vec![1, 1, 1, 1]);
 }
 
 #[test]

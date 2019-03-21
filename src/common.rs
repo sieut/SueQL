@@ -1,10 +1,10 @@
-use std::io::Cursor;
-use std::sync::RwLockWriteGuard;
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use db_state;
 use log::LSN;
-use storage::buf_mgr::BufMgr;
+use std::io::Cursor;
+use std::sync::RwLockWriteGuard;
 use storage::buf_key::BufKey;
+use storage::buf_mgr::BufMgr;
 use storage::buf_page::BufPage;
 use tuple::tuple_ptr::TuplePtr;
 use utils;
@@ -22,8 +22,8 @@ static CUR_LSN_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 2);
 pub fn set_state(
     buf_mgr: &mut BufMgr,
     state: db_state::State,
-    guard: Option<RwLockWriteGuard<BufPage>>)
--> Result<(), std::io::Error> {
+    guard: Option<RwLockWriteGuard<BufPage>>,
+) -> Result<(), std::io::Error> {
     let meta = buf_mgr.get_buf(&META_BUF_KEY)?;
     let mut guard = match guard {
         Some(guard) => guard,
@@ -43,8 +43,7 @@ pub fn get_new_lsn(buf_mgr: &mut BufMgr) -> Result<LSN, std::io::Error> {
     inc_counter(buf_mgr, &CUR_LSN_PTR)
 }
 
-fn inc_counter(buf_mgr: &mut BufMgr, ptr: &TuplePtr)
-        -> Result<u32, std::io::Error> {
+fn inc_counter(buf_mgr: &mut BufMgr, ptr: &TuplePtr) -> Result<u32, std::io::Error> {
     let buf_page = buf_mgr.get_buf(&META_BUF_KEY)?;
     let mut lock = buf_page.write().unwrap();
 

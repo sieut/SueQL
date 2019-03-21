@@ -1,9 +1,9 @@
+use evmap;
 use std::collections::VecDeque;
 use std::fs;
 use std::io;
-use std::io::{Seek, Read, Write};
+use std::io::{Read, Seek, Write};
 use std::sync::{Arc, Mutex, RwLock};
-use evmap;
 use storage;
 use storage::buf_key::BufKey;
 use storage::buf_page::BufPage;
@@ -16,7 +16,7 @@ macro_rules! insert {
         assert!(!$evmap_lock.contains_key(&$key));
         $evmap_lock.insert($key, $val);
         $evmap_lock.refresh();
-    }
+    };
 }
 
 #[macro_use]
@@ -24,7 +24,7 @@ macro_rules! remove {
     ($evmap_lock:expr, $key:expr) => {
         $evmap_lock.empty($key);
         $evmap_lock.refresh();
-    }
+    };
 }
 
 #[derive(Clone, Debug)]
@@ -37,8 +37,10 @@ impl TableItem {
     fn new(page: BufPage) -> TableItem {
         TableItem {
             page: Arc::new(RwLock::new(page)),
-            info: Arc::new(RwLock::new(
-                    BufInfo{ ref_bit: false, dirty: false })),
+            info: Arc::new(RwLock::new(BufInfo {
+                ref_bit: false,
+                dirty: false,
+            })),
         }
     }
 
@@ -78,8 +80,7 @@ impl evmap::ShallowCopy for TableItem {
 
 impl PartialEq for TableItem {
     fn eq(&self, other: &TableItem) -> bool {
-        Arc::ptr_eq(&self.page, &other.page)
-            && Arc::ptr_eq(&self.info, &other.info)
+        Arc::ptr_eq(&self.page, &other.page) && Arc::ptr_eq(&self.info, &other.info)
     }
 }
 
@@ -104,18 +105,20 @@ impl BufMgr {
         let buf_table = evmap::new::<BufKey, TableItem>();
 
         let mgr = BufMgr {
-            buf_table_r:    buf_table.0,
-            buf_table_w:    Arc::new(Mutex::new(buf_table.1)),
-            evict_queue:    Arc::new(Mutex::new(VecDeque::new())),
+            buf_table_r: buf_table.0,
+            buf_table_w: Arc::new(Mutex::new(buf_table.1)),
+            evict_queue: Arc::new(Mutex::new(VecDeque::new())),
             // Default size a bit less than 4GB
-            max_size:       match max_size {
-                                Some(size) => Arc::new(size),
-                                None => Arc::new(80000)
-                            },
+            max_size: match max_size {
+                Some(size) => Arc::new(size),
+                None => Arc::new(80000),
+            },
         };
 
         let clone = mgr.clone();
-        std::thread::spawn(move || { clone.persist_loop(); });
+        std::thread::spawn(move || {
+            clone.persist_loop();
+        });
 
         mgr
     }
@@ -124,8 +127,7 @@ impl BufMgr {
         self.buf_table_r.contains_key(key)
     }
 
-    pub fn get_buf(&mut self, key: &BufKey)
-            -> Result<TableItem, io::Error> {
+    pub fn get_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
         // TODO not the best way to get_buf, but the old way was not correct
         loop {
             match self.get_item(key) {
@@ -134,7 +136,7 @@ impl BufMgr {
                     let mut write = info.write().unwrap();
                     write.ref_bit = true;
                     break Ok(buf);
-                },
+                }
                 None => {
                     self.read_buf(key)?;
                 }
@@ -142,10 +144,11 @@ impl BufMgr {
         }
     }
 
-    pub fn store_buf(&self,
-                     key: &BufKey,
-                     info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>)
-            -> Result<(), io::Error> {
+    pub fn store_buf(
+        &self,
+        key: &BufKey,
+        info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>,
+    ) -> Result<(), io::Error> {
         match self.get_item(key) {
             Some(item) => {
                 let page_lock = item.read().unwrap();
@@ -154,30 +157,31 @@ impl BufMgr {
                     None => item.info.write().unwrap(),
                 };
 
-                if !info_lock.dirty { return Ok(()); }
+                if !info_lock.dirty {
+                    return Ok(());
+                }
 
-                let mut file = fs::OpenOptions::new().write(true)
-                    .open(key.to_filename())?;
+                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(page_lock.buf().as_slice())?;
 
                 info_lock.dirty = false;
                 Ok(())
-            },
-            None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
+            }
+            None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found")),
         }
     }
 
-    pub fn new_buf(&mut self, key: &BufKey)
-            -> Result<TableItem, io::Error> {
+    pub fn new_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
         // Create new file
         if key.byte_offset() == 0 {
             // Check if the file already exists
             if fs::metadata(&key.to_filename()).is_ok() {
-                Err(io::Error::new(io::ErrorKind::AlreadyExists,
-                                   "File already exists"))
-            }
-            else {
+                Err(io::Error::new(
+                    io::ErrorKind::AlreadyExists,
+                    "File already exists",
+                ))
+            } else {
                 utils::create_file(&key.to_filename())?;
                 self.get_buf(key)
             }
@@ -186,16 +190,17 @@ impl BufMgr {
         else {
             let metadata = fs::metadata(&key.to_filename())?;
             if !metadata.is_file() {
-                Err(io::Error::new(io::ErrorKind::InvalidInput,
-                                   "Path is not a file"))
-            }
-            else if metadata.len() != key.byte_offset() {
-                Err(io::Error::new(io::ErrorKind::InvalidInput,
-                                   "Invalid key offset"))
-            }
-            else {
-                let mut file = fs::OpenOptions::new().write(true)
-                    .open(key.to_filename())?;
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Path is not a file",
+                ))
+            } else if metadata.len() != key.byte_offset() {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "Invalid key offset",
+                ))
+            } else {
+                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(&BufPage::default_buf())?;
                 self.get_buf(key)
@@ -235,20 +240,22 @@ impl BufMgr {
                             self.store_buf(&key, Some(guard))?;
                             remove!(buf_w, key.clone());
                             break;
-                        }
-                        else {
+                        } else {
                             guard.ref_bit = false;
                         }
-                    },
+                    }
                     Err(_) => {}
                 };
 
                 evict_q.push_back(key);
-            };
+            }
         }
 
-        insert!(buf_w, key.clone(),
-                TableItem::new(BufPage::load_from(&buf, key)?));
+        insert!(
+            buf_w,
+            key.clone(),
+            TableItem::new(BufPage::load_from(&buf, key)?)
+        );
         evict_q.push_back(key.clone());
 
         Ok(())
@@ -284,13 +291,11 @@ impl BufMgr {
         let keys = self.evict_queue.lock().unwrap().clone();
         for it in keys.iter() {
             match self.store_buf(&*it, None) {
-                Ok(_) => {},
-                Err(e) => {
-                    match e.kind() {
-                        io::ErrorKind::NotFound => {},
-                        _ => return Err(e)
-                    }
-                }
+                Ok(_) => {}
+                Err(e) => match e.kind() {
+                    io::ErrorKind::NotFound => {}
+                    _ => return Err(e),
+                },
             }
         }
 
