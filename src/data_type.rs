@@ -118,7 +118,7 @@ impl DataType {
         }
     }
 
-    pub fn size(&self, bytes: Option<&[u8]>) -> Option<usize> {
+    pub fn data_size(&self, bytes: Option<&[u8]>) -> Option<usize> {
         match self {
             &DataType::Char => Some(1),
             &DataType::U32 | &DataType::I32 => Some(4),
@@ -188,7 +188,7 @@ impl DataType {
     }
 
     pub fn data_to_string(&self, bytes: &[u8]) -> Option<String> {
-        if bytes.len() == 0 || bytes.len() != self.size(Some(bytes)).unwrap_or(0) {
+        if bytes.len() == 0 || bytes.len() != self.data_size(Some(bytes)).unwrap_or(0) {
             return None;
         }
 

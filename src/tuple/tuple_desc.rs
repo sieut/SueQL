@@ -84,7 +84,7 @@ impl TupleDesc {
         let mut full_data = vec![];
         let mut bytes_used = 0;
         for attr in self.attr_types.iter() {
-            let attr_size = attr.size(Some(&bytes[bytes_used..bytes.len()])).unwrap();
+            let attr_size = attr.data_size(Some(&bytes[bytes_used..bytes.len()])).unwrap();
             let slice = &bytes[bytes_used..bytes_used + attr_size];
             match attr.data_to_string(slice) {
                 Some(string) => full_data.push(string),
@@ -92,7 +92,7 @@ impl TupleDesc {
                     return None;
                 }
             };
-            bytes_used += attr.size(Some(slice)).unwrap();
+            bytes_used += attr.data_size(Some(slice)).unwrap();
         }
 
         let result = match filter_indices {
@@ -105,7 +105,7 @@ impl TupleDesc {
     pub fn assert_data_len(&self, data: &[u8]) -> Result<(), std::io::Error> {
         let mut sum = 0;
         for attr in self.attr_types.iter() {
-            sum += match attr.size(Some(&data[sum..data.len()])) {
+            sum += match attr.data_size(Some(&data[sum..data.len()])) {
                 Some(size) => size,
                 None => {
                     return Ok(());
