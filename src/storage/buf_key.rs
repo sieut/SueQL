@@ -1,4 +1,4 @@
-use common::ID;
+use internal_types::ID;
 use storage::{Storable, PAGE_SIZE};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]

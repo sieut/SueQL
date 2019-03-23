@@ -7,11 +7,12 @@ extern crate enum_primitive;
 extern crate linenoise;
 extern crate nom_sql;
 
-mod common;
 mod data_type;
 mod db_state;
 mod exec;
+mod internal_types;
 mod log;
+mod meta;
 mod rel;
 mod storage;
 mod tuple;
@@ -35,7 +36,7 @@ fn main() {
                         Ok(query) => {
                             let mut state = db_state.clone();
                             std::thread::spawn(move || {
-                                exec::exec(query, &mut state.buf_mgr).unwrap();
+                                exec::exec(query, &mut state).unwrap();
                             });
                         }
                         Err(e) => {

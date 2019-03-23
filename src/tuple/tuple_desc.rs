@@ -1,6 +1,6 @@
 use data_type::DataType;
 use nom_sql::Literal;
-use tuple::TupleData;
+use internal_types::TupleData;
 
 #[derive(Clone)]
 pub struct TupleDesc {

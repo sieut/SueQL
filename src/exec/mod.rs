@@ -1,22 +1,23 @@
-use common;
+use db_state::DbState;
+use internal_types::ID;
 use nom_sql;
 use nom_sql::SqlQuery;
+use meta::TABLE_REL_ID;
 use rel::Rel;
-use storage::buf_mgr::BufMgr;
 use tuple;
 
-pub fn exec(query: SqlQuery, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
+pub fn exec(query: SqlQuery, db_state: &mut DbState) -> Result<(), std::io::Error> {
     match query {
-        SqlQuery::CreateTable(stmt) => create_table(stmt, buf_mgr),
-        SqlQuery::Insert(stmt) => insert(stmt, buf_mgr),
-        SqlQuery::Select(stmt) => select(stmt, buf_mgr),
+        SqlQuery::CreateTable(stmt) => create_table(stmt, db_state),
+        SqlQuery::Insert(stmt) => insert(stmt, db_state),
+        SqlQuery::Select(stmt) => select(stmt, db_state),
         _ => Ok(()),
     }
 }
 
 fn create_table(
     stmt: nom_sql::CreateTableStatement,
-    buf_mgr: &mut BufMgr,
+    db_state: &mut DbState,
 ) -> Result<(), std::io::Error> {
     use data_type::DataType;
     use tuple::tuple_desc::TupleDesc;
@@ -32,18 +33,18 @@ fn create_table(
         .map(|ref field| field.column.name.clone())
         .collect();
     let tuple_desc = TupleDesc::new(attr_types, attr_names);
-    Rel::new(tuple_desc, buf_mgr, Some(stmt.table.name))?;
+    Rel::new(stmt.table.name, tuple_desc, db_state)?;
     Ok(())
 }
 
-fn select(stmt: nom_sql::SelectStatement, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
+fn select(stmt: nom_sql::SelectStatement, db_state: &mut DbState) -> Result<(), std::io::Error> {
     // Only Select from 1 table rn
-    let table_id = get_table_id(stmt.tables[0].name.clone(), buf_mgr)?;
-    let rel = Rel::load(table_id, buf_mgr)?;
+    let table_id = get_table_id(stmt.tables[0].name.clone(), db_state)?;
+    let rel = Rel::load(table_id, db_state)?;
     let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
 
     rel.scan(
-        buf_mgr,
+        db_state,
         |_| true,
         |data| {
             println!(
@@ -55,21 +56,21 @@ fn select(stmt: nom_sql::SelectStatement, buf_mgr: &mut BufMgr) -> Result<(), st
     Ok(())
 }
 
-fn insert(stmt: nom_sql::InsertStatement, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
-    let table_id = get_table_id(stmt.table.name.clone(), buf_mgr)?;
-    let rel = Rel::load(table_id, buf_mgr)?;
+fn insert(stmt: nom_sql::InsertStatement, db_state: &mut DbState) -> Result<(), std::io::Error> {
+    let table_id = get_table_id(stmt.table.name.clone(), db_state)?;
+    let rel = Rel::load(table_id, db_state)?;
     let tuples = rel.data_from_literal(stmt.data.clone());
     for tup in tuples.iter() {
-        rel.write_tuple(&*tup, buf_mgr)?;
+        rel.write_tuple(&*tup, db_state)?;
     }
     Ok(())
 }
 
-fn get_table_id(name: String, buf_mgr: &mut BufMgr) -> Result<common::ID, std::io::Error> {
-    let rel = Rel::load(common::TABLE_REL_ID, buf_mgr)?;
+fn get_table_id(name: String, db_state: &mut DbState) -> Result<ID, std::io::Error> {
+    let rel = Rel::load(TABLE_REL_ID, db_state)?;
     let mut id = String::from("");
     rel.scan(
-        buf_mgr,
+        db_state,
         |data| {
             let vals = rel.data_to_strings(data, None).unwrap();
             vals[0].clone() == name
@@ -78,7 +79,7 @@ fn get_table_id(name: String, buf_mgr: &mut BufMgr) -> Result<common::ID, std::i
             id = rel.data_to_strings(data, None).unwrap()[1].clone();
         },
     )?;
-    Ok(id.parse::<common::ID>().unwrap())
+    Ok(id.parse::<ID>().unwrap())
 }
 
 fn build_select_fields(

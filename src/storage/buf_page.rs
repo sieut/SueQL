@@ -1,6 +1,6 @@
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
-use log::LSN;
+use internal_types::LSN;
 use std::io::Cursor;
 use std::iter::Iterator;
 use storage::buf_key::BufKey;
