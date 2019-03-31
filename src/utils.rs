@@ -19,3 +19,15 @@ pub fn create_file(fname: &str) -> Result<(), std::io::Error> {
     file.write_all(&BufPage::default_buf())?;
     Ok(())
 }
+
+pub fn file_len(fname: &str) -> Result<u64, std::io::Error> {
+    use std::fs::metadata;
+    use std::io::{Error, ErrorKind};
+
+    let file_meta = metadata(fname)?;
+    if !file_meta.is_file() {
+        Err(Error::new(ErrorKind::InvalidInput, "Path is not a file"))
+    } else {
+        Ok(file_meta.len())
+    }
+}

@@ -116,7 +116,7 @@ impl Rel {
         let data_page = db_state.buf_mgr.get_buf(&BufKey::new(self.rel_id, num_data_pages as u64))?;
         let mut lock = data_page.write().unwrap();
 
-        if lock.available_data_space() >= data.len() + 4 {
+        if lock.available_data_space() >= data.len() {
             lock.write_tuple_data(data, None)?;
             Ok(())
         }

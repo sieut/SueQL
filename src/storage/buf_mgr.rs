@@ -173,14 +173,12 @@ impl BufMgr {
     }
 
     pub fn new_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
+        use std::io::{Error, ErrorKind};
         // Create new file
         if key.byte_offset() == 0 {
             // Check if the file already exists
             if fs::metadata(&key.to_filename()).is_ok() {
-                Err(io::Error::new(
-                    io::ErrorKind::AlreadyExists,
-                    "File already exists",
-                ))
+                Err(Error::new(ErrorKind::AlreadyExists, "File already exists"))
             } else {
                 utils::create_file(&key.to_filename())?;
                 self.get_buf(key)
@@ -188,17 +186,8 @@ impl BufMgr {
         }
         // Add new page to file
         else {
-            let metadata = fs::metadata(&key.to_filename())?;
-            if !metadata.is_file() {
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Path is not a file",
-                ))
-            } else if metadata.len() != key.byte_offset() {
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "Invalid key offset",
-                ))
+            if utils::file_len(&key.to_filename())? != key.byte_offset() {
+                Err(Error::new(ErrorKind::InvalidInput, "Invalid key offset"))
             } else {
                 let mut file = fs::OpenOptions::new().write(true).open(key.to_filename())?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;

@@ -3,8 +3,8 @@ use storage::{Storable, PAGE_SIZE};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct BufKey {
-    file_id: ID,
-    offset: u64,
+    pub file_id: ID,
+    pub offset: u64,
 }
 
 impl BufKey {

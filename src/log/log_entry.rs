@@ -1,35 +1,38 @@
-use log::{OpType, LSN};
+use db_state::DbState;
+use log::{LogHeader, OpType};
 use storage::{BufKey, Storable};
-use tuple::TupleData;
+use internal_types::TupleData;
 
 pub struct LogEntry {
     header: LogHeader,
     data: TupleData,
 }
 
-pub struct LogHeader {
-    lsn: LSN,
-    buf_key: BufKey,
-    op: OpType,
-}
-
-impl Storable for LogHeader {
-    fn size() -> usize {
-        LSN::size() + BufKey::size() + OpType::size()
+impl LogEntry {
+    pub fn load(bytes: TupleData) -> Result<LogEntry, std::io::Error> {
+        let (header, data) = LogHeader::from_data(bytes)?;
+        Ok(LogEntry { header, data })
     }
 
-    fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
-        let (lsn, bytes) = LSN::from_data(bytes)?;
-        let (buf_key, bytes) = BufKey::from_data(bytes)?;
-        let (op, bytes) = OpType::from_data(bytes)?;
-        Ok((LogHeader { lsn, buf_key, op }, bytes))
+    pub fn new(
+        buf_key: BufKey,
+        op: OpType,
+        data: TupleData,
+        db_state: &mut DbState
+    ) -> Result<LogEntry, std::io::Error> {
+        let lsn = db_state.meta.get_new_lsn()?;
+        let header = LogHeader::new(lsn, buf_key, op);
+        Ok(LogEntry { header, data })
     }
 
-    fn to_data(&self) -> Vec<u8> {
+    pub fn size(&self) -> usize {
+        LogHeader::size() + self.data.len()
+    }
+
+    pub fn to_data(&self) -> TupleData {
         let mut data = vec![];
-        data.append(&mut self.lsn.to_data());
-        data.append(&mut self.buf_key.to_data());
-        data.append(&mut self.op.to_data());
+        data.append(&mut self.header.to_data());
+        data.append(&mut self.data.clone());
         data
     }
 }

@@ -142,6 +142,10 @@ impl BufPage {
         &self.buf
     }
 
+    pub fn buf_key(&self) -> BufKey {
+        self.buf_key.clone()
+    }
+
     fn offset_to_ptr(buf_offset: usize) -> PagePtr {
         HEADER_SIZE + buf_offset * 4
     }
