@@ -1,29 +1,42 @@
-use internal_types::{ID, LSN};
+use internal_types::ID;
 use log::LogEntry;
 use std::sync::{Arc, RwLock};
 use storage::{BufMgr, BufKey};
 use storage::buf_mgr::TableItem;
+use tuple::TuplePtr;
 
 pub static LOG_REL_ID: ID = 2;
 static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0);
 
+#[derive(Clone, Debug)]
 pub struct LogMgr {
-    // Needs BufMgr to call store_buf on new log entries
-    buf_mgr: BufMgr,
     meta_page: TableItem,
     cur_page_key: Arc<RwLock<BufKey>>,
 }
 
 impl LogMgr {
-    pub fn new(mut buf_mgr: BufMgr) -> Result<LogMgr, std::io::Error> {
+    pub fn create_and_load(buf_mgr: &mut BufMgr)
+    -> Result<LogMgr, std::io::Error> {
+        use std::io::ErrorKind;
+
+        match LogMgr::load(buf_mgr) {
+            Ok(log_mgr) => Ok(log_mgr),
+            Err(e) => match e.kind() {
+                ErrorKind::NotFound => LogMgr::new(buf_mgr),
+                _ => panic!("Cannot create and load LogMgr\nError: {:?}", e)
+            }
+        }
+    }
+
+    pub fn new(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
         let meta_page = buf_mgr.new_buf(&LOG_META_KEY)?;
         // TODO save data in meta
         let cur_page_key = Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1)));
 
-        Ok(LogMgr { buf_mgr, meta_page, cur_page_key })
+        Ok(LogMgr { meta_page, cur_page_key })
     }
 
-    pub fn load(mut buf_mgr: BufMgr) -> Result<LogMgr, std::io::Error> {
+    pub fn load(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
         use utils::file_len;
         use storage::PAGE_SIZE;
 
@@ -33,13 +46,14 @@ impl LogMgr {
         let cur_page_key = Arc::new(RwLock::new(
             BufKey::new(LOG_REL_ID, log_file_len / PAGE_SIZE as u64 - 1)));
 
-        Ok(LogMgr { buf_mgr, meta_page, cur_page_key })
+        Ok(LogMgr { meta_page, cur_page_key })
     }
 
     pub fn write_entries<E>(
         &mut self,
-        entries: E
-    ) -> Result<(), std::io::Error>
+        entries: E,
+        buf_mgr: &mut BufMgr
+    ) -> Result<Vec<TuplePtr>, std::io::Error>
     where E: Into<std::collections::VecDeque<LogEntry>> {
         use std::collections::VecDeque;
 
@@ -47,11 +61,12 @@ impl LogMgr {
         let _log_guard = self.meta_page.write().unwrap();
         let mut key_guard = self.cur_page_key.write().unwrap();
         let mut pages_to_store = vec![];
+        let mut ret = vec![];
 
         while entries.len() > 0 {
             pages_to_store.push(key_guard.clone());
 
-            let cur_page = self.buf_mgr.get_buf(&*key_guard)?;
+            let cur_page = buf_mgr.get_buf(&*key_guard)?;
             let mut page_guard = cur_page.write().unwrap();
 
             loop {
@@ -63,7 +78,9 @@ impl LogMgr {
                             break;
                         }
                         else {
-                            page_guard.write_tuple_data(&entry.to_data(), None)?;
+                            ret.push(
+                                page_guard.write_tuple_data(&entry.to_data(),
+                                                            None)?);
                         }
                     },
                     None => break,
@@ -72,8 +89,38 @@ impl LogMgr {
         }
 
         for key in pages_to_store.iter() {
-            self.buf_mgr.store_buf(&key, None)?;
+            buf_mgr.store_buf(&key, None)?;
         }
+        Ok(ret)
+    }
+
+    pub fn create_checkpoint(
+        &mut self,
+        buf_mgr: &mut BufMgr
+    ) -> Result<TuplePtr, std::io::Error> {
+        let pending_cp_entry = LogEntry::new_pending_cp();
+        let keys = self.write_entries(vec![pending_cp_entry], buf_mgr)?;
+        assert_eq!(keys.len(), 1);
+        Ok(keys[0].clone())
+    }
+
+    pub fn confirm_checkpoint(
+        &mut self,
+        pending_cp: TuplePtr,
+        buf_mgr: &mut BufMgr,
+    ) -> Result<(), std::io::Error> {
+        let page = buf_mgr.get_buf(&pending_cp.buf_key())?;
+        {
+            let _log_guard = self.meta_page.write().unwrap();
+            let mut page_guard = page.write().unwrap();
+
+            let cp_entry = LogEntry::new_cp();
+            // NOTE when update tuple in BufPage is implemented, change this
+            page_guard.write_tuple_data(
+                &cp_entry.to_data(), Some(&pending_cp))?;
+        }
+
+        buf_mgr.store_buf(&pending_cp.buf_key(), None)?;
         Ok(())
     }
 }

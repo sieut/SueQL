@@ -3,6 +3,7 @@ use storage::buf_page::PagePtr;
 
 /// Struct that specifies location of tuple in a buffer
 ///     * buf_offset: starting from 0
+#[derive(Clone, Debug)]
 pub struct TuplePtr {
     buf_key: BufKey,
     buf_offset: usize,

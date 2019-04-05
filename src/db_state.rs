@@ -1,12 +1,14 @@
 extern crate num;
 use self::num::FromPrimitive;
 
+use log::LogMgr;
 use meta::Meta;
-use storage::buf_mgr::BufMgr;
+use storage::BufMgr;
 
 #[derive(Clone, Debug)]
 pub struct DbState {
     pub buf_mgr: BufMgr,
+    pub log_mgr: LogMgr,
     pub meta: Meta,
     settings: DbSettings,
 }
@@ -14,9 +16,10 @@ pub struct DbState {
 impl DbState {
     pub fn start_db(settings: DbSettings) -> Result<DbState, std::io::Error> {
         let mut buf_mgr = BufMgr::new(settings.buf_mgr_size);
+        let log_mgr = LogMgr::create_and_load(&mut buf_mgr)?;
         let meta = Meta::create_and_load(&mut buf_mgr)?;
         meta.set_state(State::Up)?;
-        Ok(DbState { buf_mgr, meta, settings, })
+        Ok(DbState { buf_mgr, log_mgr, meta, settings, })
     }
 
     pub fn shutdown(&mut self) -> Result<(), std::io::Error> {

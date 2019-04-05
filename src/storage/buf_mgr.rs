@@ -1,4 +1,5 @@
 use evmap;
+use log::LogMgr;
 use std::collections::VecDeque;
 use std::fs;
 use std::io;
@@ -104,7 +105,7 @@ impl BufMgr {
     pub fn new(max_size: Option<usize>) -> BufMgr {
         let buf_table = evmap::new::<BufKey, TableItem>();
 
-        let mgr = BufMgr {
+        BufMgr {
             buf_table_r: buf_table.0,
             buf_table_w: Arc::new(Mutex::new(buf_table.1)),
             evict_queue: Arc::new(Mutex::new(VecDeque::new())),
@@ -113,14 +114,16 @@ impl BufMgr {
                 Some(size) => Arc::new(size),
                 None => Arc::new(80000),
             },
-        };
+        }
+    }
 
-        let clone = mgr.clone();
+    pub fn start_persist(&self, log_mgr: &LogMgr) -> Result<(), std::io::Error> {
+        let buf_mgr_clone = self.clone();
+        let log_mgr_clone = log_mgr.clone();
         std::thread::spawn(move || {
-            clone.persist_loop();
+            buf_mgr_clone.persist_loop(log_mgr_clone);
         });
-
-        mgr
+        Ok(())
     }
 
     pub fn has_buf(&self, key: &BufKey) -> bool {
@@ -265,13 +268,22 @@ impl BufMgr {
         self.get_item(key).unwrap().ref_count() - 3
     }
 
-    fn persist_loop(mut self) {
+    fn persist_loop(mut self, mut log_mgr: LogMgr) {
         use std::{thread, time};
         loop {
             thread::sleep(time::Duration::from_millis(200));
-            self.persist().unwrap();
+
+            let cp_ptr = match log_mgr.create_checkpoint(&mut self) {
+                Ok(ptr) => ptr,
+                Err(e) => panic!("Creating checkpoint failed\nError: {:?}", e)
+            };
+
             if let Err(e) = self.persist() {
-                panic!("Persist failed\n Error: {}", e);
+                panic!("Persist failed\nError: {:?}", e);
+            }
+
+            if let Err(e) = log_mgr.confirm_checkpoint(cp_ptr, &mut self) {
+                panic!("Confirming checkpoint failed\nError: {:?}", e);
             }
         }
     }

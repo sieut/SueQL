@@ -57,7 +57,7 @@ impl BufPage {
         &mut self,
         tuple_data: &[u8],
         tuple_ptr: Option<&TuplePtr>,
-    ) -> Result<PagePtr, std::io::Error> {
+    ) -> Result<TuplePtr, std::io::Error> {
         let ret_offset;
 
         let page_ptr: PagePtr = match tuple_ptr {
@@ -108,7 +108,7 @@ impl BufPage {
 
         self.buf[page_ptr..page_ptr + tuple_data.len()].clone_from_slice(tuple_data);
 
-        Ok(ret_offset)
+        Ok(TuplePtr::new(self.buf_key.clone(), ret_offset))
     }
 
     pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr) -> Result<&[u8], std::io::Error> {

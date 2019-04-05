@@ -7,6 +7,8 @@ enum_from_primitive! {
     pub enum OpType {
         InsertTuple,
         UpdateTuple,
+        Checkpoint,
+        PendingCheckpoint,
     }
 }
 
