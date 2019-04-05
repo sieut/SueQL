@@ -9,10 +9,12 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
     - [ ] LogMgr
         - [X] Write entries to disk
         - [ ] Checkpointing
+            - [ ] Only if there are new log entries
+        - [ ] Recovery
     - [ ] WAL on writes
-    - [ ] Recovery
     - [ ] Tests
  - [ ] Advanced exec nodes
  - [ ] Optimizer
  - [ ] Misc
-    - [ ] Name data files based on DbSettings
+    - [X] Name data files based on DbSettings
+    - [X] Debug logging
