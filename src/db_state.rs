@@ -15,7 +15,7 @@ pub struct DbState {
 
 impl DbState {
     pub fn start_db(settings: DbSettings) -> Result<DbState, std::io::Error> {
-        let mut buf_mgr = BufMgr::new(settings.buf_mgr_size);
+        let mut buf_mgr = BufMgr::new(settings.clone());
         let log_mgr = LogMgr::create_and_load(&mut buf_mgr)?;
         let meta = Meta::create_and_load(&mut buf_mgr)?;
         meta.set_state(State::Up)?;
@@ -35,11 +35,12 @@ impl DbState {
 #[derive(Clone, Debug)]
 pub struct DbSettings {
     pub buf_mgr_size: Option<usize>,
+    pub data_dir: Option<String>,
 }
 
 impl DbSettings {
     pub fn default() -> DbSettings {
-        DbSettings { buf_mgr_size: None }
+        DbSettings { buf_mgr_size: None, data_dir: None }
     }
 }
 

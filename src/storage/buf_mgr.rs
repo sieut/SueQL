@@ -1,3 +1,4 @@
+use db_state::DbSettings;
 use evmap;
 use log::LogMgr;
 use std::collections::VecDeque;
@@ -99,10 +100,11 @@ pub struct BufMgr {
     buf_table_w: Arc<Mutex<evmap::WriteHandle<BufKey, TableItem>>>,
     evict_queue: Arc<Mutex<VecDeque<BufKey>>>,
     max_size: Arc<usize>,
+    data_dir: Arc<String>,
 }
 
 impl BufMgr {
-    pub fn new(max_size: Option<usize>) -> BufMgr {
+    pub fn new(settings: DbSettings) -> BufMgr {
         let buf_table = evmap::new::<BufKey, TableItem>();
 
         BufMgr {
@@ -110,10 +112,8 @@ impl BufMgr {
             buf_table_w: Arc::new(Mutex::new(buf_table.1)),
             evict_queue: Arc::new(Mutex::new(VecDeque::new())),
             // Default size a bit less than 4GB
-            max_size: match max_size {
-                Some(size) => Arc::new(size),
-                None => Arc::new(80000),
-            },
+            max_size: Arc::new(settings.buf_mgr_size.unwrap_or(80000)),
+            data_dir: Arc::new(settings.data_dir.unwrap_or("data".to_string())),
         }
     }
 
@@ -164,7 +164,7 @@ impl BufMgr {
                     return Ok(());
                 }
 
-                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename())?;
+                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename(self.data_dir()))?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(page_lock.buf().as_slice())?;
 
@@ -180,19 +180,19 @@ impl BufMgr {
         // Create new file
         if key.byte_offset() == 0 {
             // Check if the file already exists
-            if fs::metadata(&key.to_filename()).is_ok() {
+            if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
                 Err(Error::new(ErrorKind::AlreadyExists, "File already exists"))
             } else {
-                utils::create_file(&key.to_filename())?;
+                utils::create_file(&key.to_filename(self.data_dir()))?;
                 self.get_buf(key)
             }
         }
         // Add new page to file
         else {
-            if utils::file_len(&key.to_filename())? != key.byte_offset() {
+            if utils::file_len(&key.to_filename(self.data_dir()))? != key.byte_offset() {
                 Err(Error::new(ErrorKind::InvalidInput, "Invalid key offset"))
             } else {
-                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename())?;
+                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename(self.data_dir()))?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(&BufPage::default_buf())?;
                 self.get_buf(key)
@@ -201,7 +201,7 @@ impl BufMgr {
     }
 
     fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
-        let mut file = fs::File::open(key.to_filename())?;
+        let mut file = fs::File::open(key.to_filename(self.data_dir()))?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
         let mut buf = [0 as u8; storage::PAGE_SIZE];
@@ -266,6 +266,10 @@ impl BufMgr {
         // -3 because evmap has 2 refs
         // and calling get_item will create a ref
         self.get_item(key).unwrap().ref_count() - 3
+    }
+
+    pub fn data_dir(&self) -> String {
+        self.data_dir.to_string()
     }
 
     fn persist_loop(mut self, mut log_mgr: LogMgr) {

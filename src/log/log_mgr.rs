@@ -42,7 +42,8 @@ impl LogMgr {
 
         let meta_page = buf_mgr.get_buf(&LOG_META_KEY)?;
         // TODO load data from meta
-        let log_file_len = file_len(&LOG_META_KEY.to_filename())?;
+        let log_file_len = file_len(
+            &LOG_META_KEY.to_filename(buf_mgr.data_dir()))?;
         let cur_page_key = Arc::new(RwLock::new(
             BufKey::new(LOG_REL_ID, log_file_len / PAGE_SIZE as u64 - 1)));
 
