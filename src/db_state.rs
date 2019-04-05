@@ -15,10 +15,14 @@ pub struct DbState {
 
 impl DbState {
     pub fn start_db(settings: DbSettings) -> Result<DbState, std::io::Error> {
+        dbg_log!("Starting SueQL database");
         let mut buf_mgr = BufMgr::new(settings.clone());
         let log_mgr = LogMgr::create_and_load(&mut buf_mgr)?;
         let meta = Meta::create_and_load(&mut buf_mgr)?;
         meta.set_state(State::Up)?;
+
+        buf_mgr.start_persist(&log_mgr)?;
+
         Ok(DbState { buf_mgr, log_mgr, meta, settings, })
     }
 

@@ -31,6 +31,7 @@ impl LogMgr {
     pub fn new(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
         let meta_page = buf_mgr.new_buf(&LOG_META_KEY)?;
         // TODO save data in meta
+        let _first_page = buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1))?;
         let cur_page_key = Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1)));
 
         Ok(LogMgr { meta_page, cur_page_key })
@@ -67,7 +68,7 @@ impl LogMgr {
         while entries.len() > 0 {
             pages_to_store.push(key_guard.clone());
 
-            let cur_page = buf_mgr.get_buf(&*key_guard)?;
+            let cur_page = buf_mgr.new_buf(&*key_guard)?;
             let mut page_guard = cur_page.write().unwrap();
 
             loop {

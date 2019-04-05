@@ -189,14 +189,15 @@ impl BufMgr {
         }
         // Add new page to file
         else {
-            if utils::file_len(&key.to_filename(self.data_dir()))? != key.byte_offset() {
-                Err(Error::new(ErrorKind::InvalidInput, "Invalid key offset"))
-            } else {
+            // If the offset is at the end of file, create new buf
+            if utils::file_len(&key.to_filename(self.data_dir()))?
+                    == key.byte_offset() {
                 let mut file = fs::OpenOptions::new().write(true).open(key.to_filename(self.data_dir()))?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(&BufPage::default_buf())?;
-                self.get_buf(key)
             }
+
+            self.get_buf(key)
         }
     }
 

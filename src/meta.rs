@@ -72,7 +72,7 @@ impl Meta {
 
         Ok(Meta {
             buf: buf.clone(),
-            cur_id: Arc::new(Mutex::new(0)),
+            cur_id: Arc::new(Mutex::new(2)),
             cur_lsn: Arc::new(Mutex::new(0))
         })
     }
@@ -108,7 +108,7 @@ impl Meta {
     }
 
     const fn default_id_counter() -> [u8; 4] {
-        [0u8, 0u8, 0u8, 1u8]
+        [0u8, 0u8, 0u8, 2u8]
     }
 }
 

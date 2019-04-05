@@ -7,6 +7,9 @@ extern crate enum_primitive;
 extern crate linenoise;
 extern crate nom_sql;
 
+#[macro_use]
+mod utils;
+
 mod data_type;
 mod db_state;
 mod exec;
@@ -16,7 +19,6 @@ mod meta;
 mod rel;
 mod storage;
 mod tuple;
-mod utils;
 
 use db_state::{DbSettings, DbState};
 
@@ -34,10 +36,7 @@ fn main() {
                 if input.find(';').is_some() {
                     match nom_sql::parse_query(&query) {
                         Ok(query) => {
-                            let mut state = db_state.clone();
-                            std::thread::spawn(move || {
-                                exec::exec(query, &mut state).unwrap();
-                            });
+                            exec::exec(query, &mut db_state).unwrap();
                         }
                         Err(e) => {
                             println!("{}", e);

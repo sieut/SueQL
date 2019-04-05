@@ -80,6 +80,9 @@ impl Rel {
     ) -> Result<Rel, std::io::Error> {
         let rel_id = db_state.meta.get_new_id()?;
         let rel = Rel { rel_id, tuple_desc };
+
+        dbg_log!("Creating rel {} with id {}", name, rel_id);
+
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         // Add an entry to the table info rel
         let table_rel = Rel::load(meta::TABLE_REL_ID, db_state)?;

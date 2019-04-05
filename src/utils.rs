@@ -1,6 +1,14 @@
 use std::fs::File;
 use std::io::Write;
 
+#[macro_export]
+macro_rules! dbg_log {
+    ($($log_expr:expr),+) => {
+        dbg!();
+        println!($($log_expr),+);
+    }
+}
+
 pub fn assert_data_len(data: &[u8], desired_len: usize) -> Result<(), std::io::Error> {
     if data.len() == desired_len {
         Ok(())
