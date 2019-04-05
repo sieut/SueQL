@@ -29,16 +29,10 @@ impl Storable for BufKey {
     }
 
     fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
-        use byteorder::{LittleEndian, ReadBytesExt};
-        use std::io::Cursor;
-
-        let mut cursor = Cursor::new(bytes);
-        let key = BufKey::new(
-            cursor.read_u32::<LittleEndian>()?,
-            cursor.read_u64::<LittleEndian>()?,
-        );
-        let leftover_data = Self::leftover_data(cursor);
-        Ok((key, leftover_data))
+        let (file_id, bytes) = ID::from_data(bytes)?;
+        let (offset, bytes) = u64::from_data(bytes)?;
+        let key = BufKey::new(file_id, offset);
+        Ok((key, bytes))
     }
 
     fn to_data(&self) -> Vec<u8> {

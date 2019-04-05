@@ -69,11 +69,11 @@ impl BufPage {
                     panic!("Different sized tuple");
                 }
 
-                ret_offset = ptr.buf_offset();
+                ret_offset = ptr.buf_offset;
 
                 let mut reader = Cursor::new(
-                    &self.buf[BufPage::offset_to_ptr(ptr.buf_offset())
-                        ..(BufPage::offset_to_ptr(ptr.buf_offset() + 1))],
+                    &self.buf[BufPage::offset_to_ptr(ptr.buf_offset)
+                        ..(BufPage::offset_to_ptr(ptr.buf_offset + 1))],
                 );
                 reader.read_u16::<LittleEndian>()? as usize
             }
@@ -114,8 +114,8 @@ impl BufPage {
     pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr) -> Result<&[u8], std::io::Error> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
         let mut reader = Cursor::new(
-            &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset())
-                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset() + 1)],
+            &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
+                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)],
         );
         let start = reader.read_u16::<LittleEndian>()? as usize;
         let end = reader.read_u16::<LittleEndian>()? as usize;
@@ -159,15 +159,15 @@ impl BufPage {
     }
 
     fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr) -> Result<(), std::io::Error> {
-        if self.buf_key != tuple_ptr.buf_key() {
+        if self.buf_key != tuple_ptr.buf_key {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 "Invalid buf_key",
             ))
-        } else if tuple_ptr.buf_offset() >= self.tuple_count() {
+        } else if tuple_ptr.buf_offset >= self.tuple_count() {
             Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
-                format!("Invalid buf_offset {}", tuple_ptr.buf_offset()),
+                format!("Invalid buf_offset {}", tuple_ptr.buf_offset),
             ))
         } else {
             Ok(())

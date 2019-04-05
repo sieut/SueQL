@@ -8,6 +8,7 @@ pub mod storable;
 pub use self::buf_key::BufKey;
 pub use self::buf_mgr::BufMgr;
 pub use self::buf_page::BufPage;
+pub use self::buf_page::PagePtr;
 pub use self::storable::Storable;
 
 #[cfg(test)]
