@@ -11,8 +11,8 @@ fn test_write_new_tuple() {
 
     let mut buf_page = new_page();
     let test_data = [5; 16];
-    let buf_offset = buf_page.write_tuple_data(&test_data, None).unwrap();
-    assert_eq!(buf_offset, 0);
+    let tuple_ptr = buf_page.write_tuple_data(&test_data, None).unwrap();
+    assert_eq!(tuple_ptr.buf_offset, 0);
 
     let mut reader = Cursor::new(&buf_page.buf()[4..10]);
     // upper_ptr

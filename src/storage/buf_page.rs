@@ -80,7 +80,8 @@ impl BufPage {
             None => {
                 if self.available_data_space() < tuple_data.len() {
                     use std::io::{Error, ErrorKind};
-                    return Err(Error::new(ErrorKind::Other, "Not enough space for tuple"));
+                    return Err(Error::new(
+                        ErrorKind::Other, "Not enough space for tuple"));
                 }
 
                 ret_offset = BufPage::ptr_to_offset(self.lower_ptr);

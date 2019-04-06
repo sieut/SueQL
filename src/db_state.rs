@@ -10,7 +10,7 @@ pub struct DbState {
     pub buf_mgr: BufMgr,
     pub log_mgr: LogMgr,
     pub meta: Meta,
-    settings: DbSettings,
+    pub settings: DbSettings,
 }
 
 impl DbState {
@@ -27,11 +27,11 @@ impl DbState {
     }
 
     pub fn shutdown(&mut self) -> Result<(), std::io::Error> {
+        // Set state on disk to down
+        self.meta.set_state(State::Down)?;
         // Persist one last time
         // NOTE: might be slow and extra here if BufMgr is already persisting
         self.buf_mgr.persist()?;
-        // Set state on disk to down
-        self.meta.set_state(State::Down)?;
         Ok(())
     }
 }

@@ -1,4 +1,4 @@
-use std::fs::{remove_file, File};
+use db_state::DbSettings;
 use std::io::Write;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::BufMgr;
@@ -7,12 +7,10 @@ use storage::PAGE_SIZE;
 
 #[test]
 fn test_bufmgr_get() {
-    let data_file = "1.dat";
-
-    setup_bufmgr(data_file);
-    let mut buf_mgr = BufMgr::new(None);
-    let buf_page = buf_mgr.get_buf(&BufKey::new(1, 0)).unwrap();
-    teardown_bufmgr(data_file);
+    let data_dir = "test_bufmgr_get";
+    let mut buf_mgr = setup_bufmgr(data_dir, None);
+    let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    teardown_bufmgr(data_dir);
 
     let lock = buf_page.read().unwrap();
     assert_eq!(lock.buf().len(), PAGE_SIZE);
@@ -20,22 +18,24 @@ fn test_bufmgr_get() {
 
 #[test]
 fn test_bufmgr_store() {
-    let data_file = "2.dat";
-
-    setup_bufmgr(data_file);
-    let mut buf_mgr = BufMgr::new(None);
+    let data_dir = "test_bufmgr_store";
+    let mut buf_mgr = setup_bufmgr(data_dir, None);
     {
-        let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
+        let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
         // Change values in buf_page
         let mut lock = buf_page.write().unwrap();
         lock.write_tuple_data(&vec![1, 1, 1, 1], None).unwrap();
     }
     // Write buf page
-    buf_mgr.store_buf(&BufKey::new(2, 0), None).unwrap();
+    buf_mgr.store_buf(&BufKey::new(0, 0), None).unwrap();
 
-    let mut buf_mgr = BufMgr::new(None);
-    let buf_page = buf_mgr.get_buf(&BufKey::new(2, 0)).unwrap();
-    teardown_bufmgr(data_file);
+    let mut buf_mgr = BufMgr::new(
+        DbSettings {
+            buf_mgr_size: None,
+            data_dir: Some(data_dir.to_string())
+        });
+    let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    teardown_bufmgr(data_dir);
 
     let lock = buf_page.read().unwrap();
     assert_eq!(lock.upper_ptr(), PAGE_SIZE - 4);
@@ -45,81 +45,97 @@ fn test_bufmgr_store() {
 
 #[test]
 fn test_bufmgr_new_buf() {
-    let data_file = "3.dat";
+    let data_dir = "test_bufmgr_new_buf";
 
-    setup_bufmgr(data_file);
-    let mut buf_mgr = BufMgr::new(None);
-    assert!(buf_mgr.new_buf(&BufKey::new(3, 2)).is_err());
-    assert!(buf_mgr.new_buf(&BufKey::new(3, 0)).is_err());
+    let mut buf_mgr = setup_bufmgr(data_dir, None);
+    assert!(buf_mgr.new_buf(&BufKey::new(0, 2)).is_err());
+    assert!(buf_mgr.new_buf(&BufKey::new(0, 0)).is_err());
 
-    let _buf_page = buf_mgr.new_buf(&BufKey::new(3, 1)).unwrap();
-    teardown_bufmgr(data_file);
+    let _buf_page = buf_mgr.new_buf(&BufKey::new(0, 1)).unwrap();
+    teardown_bufmgr(data_dir);
 }
 
 #[test]
 fn test_bufmgr_evict() {
-    let data_file = "4.dat";
+    let data_dir = "test_bufmgr_evict";
 
-    setup_bufmgr(data_file);
     // BufMgr of max 3 pages
-    let mut buf_mgr = BufMgr::new(Some(3));
-    buf_mgr.new_buf(&BufKey::new(4, 1)).unwrap();
-    buf_mgr.new_buf(&BufKey::new(4, 2)).unwrap();
-    buf_mgr.new_buf(&BufKey::new(4, 3)).unwrap();
+    let mut buf_mgr = setup_bufmgr(data_dir, Some(3));
+    buf_mgr.new_buf(&BufKey::new(0, 1)).unwrap();
+    buf_mgr.new_buf(&BufKey::new(0, 2)).unwrap();
+    buf_mgr.new_buf(&BufKey::new(0, 3)).unwrap();
 
     // Queue: page-1  page-2  page-3
     // Ref:     1       1       1
-    buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 1)));
+    buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    assert!(!buf_mgr.has_buf(&BufKey::new(0, 1)));
 
     // Queue: page-2  page-3  page-0
     // Ref:     0       0       1
-    buf_mgr.get_buf(&BufKey::new(4, 1)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 2)));
+    buf_mgr.get_buf(&BufKey::new(0, 1)).unwrap();
+    assert!(!buf_mgr.has_buf(&BufKey::new(0, 2)));
 
     // Queue: page-3  page-0  page-1
     // Ref:     0       1       1
-    buf_mgr.get_buf(&BufKey::new(4, 3)).unwrap();
+    buf_mgr.get_buf(&BufKey::new(0, 3)).unwrap();
 
     // Queue: page-3  page-0  page-1
     // Ref:     1       1       1
-    buf_mgr.get_buf(&BufKey::new(4, 2)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 3)));
+    buf_mgr.get_buf(&BufKey::new(0, 2)).unwrap();
+    assert!(!buf_mgr.has_buf(&BufKey::new(0, 3)));
 
     // Queue: page-0  page-1  page-2
     // Ref:     0       0       1
-    buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
-    buf_mgr.get_buf(&BufKey::new(4, 3)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 1)));
+    buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    buf_mgr.get_buf(&BufKey::new(0, 3)).unwrap();
+    assert!(!buf_mgr.has_buf(&BufKey::new(0, 1)));
 
     // Queue: page-2  page-0  page-3
     // Ref:     1       0       1
-    let _buf_two = buf_mgr.get_buf(&BufKey::new(4, 2)).unwrap();
-    buf_mgr.get_buf(&BufKey::new(4, 0)).unwrap();
-    buf_mgr.get_buf(&BufKey::new(4, 1)).unwrap();
-    assert!(!buf_mgr.has_buf(&BufKey::new(4, 0)));
-    teardown_bufmgr(data_file);
+    let _buf_two = buf_mgr.get_buf(&BufKey::new(0, 2)).unwrap();
+    buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    buf_mgr.get_buf(&BufKey::new(0, 1)).unwrap();
+    assert!(!buf_mgr.has_buf(&BufKey::new(0, 0)));
+    teardown_bufmgr(data_dir);
 }
 
 #[test]
 fn test_bufmgr_ref() {
-    let data_file = "5.dat";
+    let data_dir = "test_bufmgr_ref";
 
-    setup_bufmgr(data_file);
-    let mut buf_mgr = BufMgr::new(None);
+    let mut buf_mgr = setup_bufmgr(data_dir, None);
     let mut clone = buf_mgr.clone();
 
-    let buf = buf_mgr.get_buf(&BufKey::new(5, 0)).unwrap();
-    let _buf_clone = clone.get_buf(&BufKey::new(5, 0)).unwrap();
+    let buf = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
+    let _buf_clone = clone.get_buf(&BufKey::new(0, 0)).unwrap();
     assert_eq!(buf.ref_count(), 3);
-    teardown_bufmgr(data_file);
+    teardown_bufmgr(data_dir);
 }
 
-fn setup_bufmgr(data_file: &str) {
-    let mut file = File::create(data_file).unwrap();
+fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
+    use std::fs::{create_dir, File};
+    use std::io::ErrorKind;
+
+    match create_dir(data_dir) {
+        Ok(_) => {},
+        Err(e) => match e.kind() {
+            ErrorKind::AlreadyExists => {},
+            _ => panic!("Error when setting up test: {:?}", e)
+        }
+    };
+
+    let mut file = File::create(format!("{}/0.dat", data_dir)).unwrap();
     file.write_all(&BufPage::default_buf()).unwrap();
+
+    let settings = DbSettings {
+        buf_mgr_size,
+        data_dir: Some(data_dir.to_string())
+    };
+
+    BufMgr::new(settings)
 }
 
-fn teardown_bufmgr(data_file: &str) {
-    remove_file(data_file).unwrap();
+fn teardown_bufmgr(data_dir: &str) {
+    use std::fs::remove_dir_all;
+    remove_dir_all(data_dir).unwrap();
 }
