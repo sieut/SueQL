@@ -1,8 +1,8 @@
 use internal_types::ID;
 use log::LogEntry;
 use std::sync::{Arc, RwLock};
-use storage::{BufMgr, BufKey, Storable};
 use storage::buf_mgr::TableItem;
+use storage::{BufKey, BufMgr, Storable};
 use tuple::TuplePtr;
 
 pub static LOG_REL_ID: ID = 2;
@@ -17,16 +17,17 @@ pub struct LogMgr {
 }
 
 impl LogMgr {
-    pub fn create_and_load(buf_mgr: &mut BufMgr)
-    -> Result<LogMgr, std::io::Error> {
+    pub fn create_and_load(
+        buf_mgr: &mut BufMgr,
+    ) -> Result<LogMgr, std::io::Error> {
         use std::io::ErrorKind;
 
         match LogMgr::load(buf_mgr) {
             Ok(log_mgr) => Ok(log_mgr),
             Err(e) => match e.kind() {
                 ErrorKind::NotFound => LogMgr::new(buf_mgr),
-                _ => panic!("Cannot create and load LogMgr\nError: {:?}", e)
-            }
+                _ => panic!("Cannot create and load LogMgr\nError: {:?}", e),
+            },
         }
     }
 
@@ -36,7 +37,10 @@ impl LogMgr {
         // Save metadata of LogMgr
         {
             let mut meta_guard = meta_page.write().unwrap();
-            meta_guard.write_tuple_data(&LogMgr::default_checkpoint().to_data(), None)?;
+            meta_guard.write_tuple_data(
+                &LogMgr::default_checkpoint().to_data(),
+                None,
+            )?;
         }
 
         let _first_page = buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1))?;
@@ -50,8 +54,8 @@ impl LogMgr {
     }
 
     pub fn load(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
-        use utils::file_len;
         use storage::PAGE_SIZE;
+        use utils::file_len;
 
         let meta_page = buf_mgr.get_buf(&LOG_META_KEY)?;
         let last_cp_data;
@@ -63,10 +67,12 @@ impl LogMgr {
         let (last_cp, last_cp_data) = TuplePtr::from_data(last_cp_data)?;
         assert_eq!(last_cp_data.len(), 0);
 
-        let log_file_len = file_len(
-            &LOG_META_KEY.to_filename(buf_mgr.data_dir()))?;
-        let cur_page_key = Arc::new(RwLock::new(
-            BufKey::new(LOG_REL_ID, log_file_len / PAGE_SIZE as u64 - 1)));
+        let log_file_len =
+            file_len(&LOG_META_KEY.to_filename(buf_mgr.data_dir()))?;
+        let cur_page_key = Arc::new(RwLock::new(BufKey::new(
+            LOG_REL_ID,
+            log_file_len / PAGE_SIZE as u64 - 1,
+        )));
 
         Ok(LogMgr {
             meta_page,
@@ -78,9 +84,11 @@ impl LogMgr {
     pub fn write_entries<E>(
         &mut self,
         entries: E,
-        buf_mgr: &mut BufMgr
+        buf_mgr: &mut BufMgr,
     ) -> Result<Vec<TuplePtr>, std::io::Error>
-    where E: Into<std::collections::VecDeque<LogEntry>> {
+    where
+        E: Into<std::collections::VecDeque<LogEntry>>,
+    {
         use std::collections::VecDeque;
 
         let mut entries: VecDeque<LogEntry> = entries.into();
@@ -102,13 +110,13 @@ impl LogMgr {
                             key_guard.offset += 1;
                             entries.push_front(entry);
                             break;
-                        }
-                        else {
+                        } else {
                             ret.push(
-                                page_guard.write_tuple_data(&entry.to_data(),
-                                                            None)?);
+                                page_guard
+                                    .write_tuple_data(&entry.to_data(), None)?,
+                            );
                         }
-                    },
+                    }
                     None => break,
                 }
             }
@@ -122,7 +130,7 @@ impl LogMgr {
 
     pub fn create_checkpoint(
         &mut self,
-        buf_mgr: &mut BufMgr
+        buf_mgr: &mut BufMgr,
     ) -> Result<TuplePtr, std::io::Error> {
         let need_cp = {
             let last_cp = self.last_cp.read().unwrap();
@@ -132,8 +140,7 @@ impl LogMgr {
             assert!(last_cp.buf_key.offset <= cur_key.offset);
             if last_cp.buf_key.offset < cur_key.offset {
                 true
-            }
-            else {
+            } else {
                 let cur_page = buf_mgr.get_buf(&cur_key)?;
                 let cur_page_guard = cur_page.read().unwrap();
                 last_cp.buf_offset < cur_page_guard.tuple_count() - 1
@@ -146,8 +153,7 @@ impl LogMgr {
             let keys = self.write_entries(vec![pending_cp_entry], buf_mgr)?;
             assert_eq!(keys.len(), 1);
             Ok(keys[0].clone())
-        }
-        else {
+        } else {
             Ok(LogMgr::default_checkpoint())
         }
     }
@@ -169,10 +175,10 @@ impl LogMgr {
 
             let cp_entry = LogEntry::new_cp();
             // NOTE when update tuple in BufPage is implemented, change this
-            log_guard.write_tuple_data(
-                &pending_cp.to_data(), Some(&LAST_CP_PTR))?;
-            page_guard.write_tuple_data(
-                &cp_entry.to_data(), Some(&pending_cp))?;
+            log_guard
+                .write_tuple_data(&pending_cp.to_data(), Some(&LAST_CP_PTR))?;
+            page_guard
+                .write_tuple_data(&cp_entry.to_data(), Some(&pending_cp))?;
 
             last_cp_guard.buf_key = pending_cp.buf_key;
             last_cp_guard.buf_offset = pending_cp.buf_offset;

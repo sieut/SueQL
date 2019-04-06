@@ -29,11 +29,10 @@ fn test_bufmgr_store() {
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(0, 0), None).unwrap();
 
-    let mut buf_mgr = BufMgr::new(
-        DbSettings {
-            buf_mgr_size: None,
-            data_dir: Some(data_dir.to_string())
-        });
+    let mut buf_mgr = BufMgr::new(DbSettings {
+        buf_mgr_size: None,
+        data_dir: Some(data_dir.to_string()),
+    });
     let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
     teardown_bufmgr(data_dir);
 
@@ -117,11 +116,11 @@ fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
     use std::io::ErrorKind;
 
     match create_dir(data_dir) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => {},
-            _ => panic!("Error when setting up test: {:?}", e)
-        }
+            ErrorKind::AlreadyExists => {}
+            _ => panic!("Error when setting up test: {:?}", e),
+        },
     };
 
     let mut file = File::create(format!("{}/0.dat", data_dir)).unwrap();
@@ -129,7 +128,7 @@ fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
 
     let settings = DbSettings {
         buf_mgr_size,
-        data_dir: Some(data_dir.to_string())
+        data_dir: Some(data_dir.to_string()),
     };
 
     BufMgr::new(settings)

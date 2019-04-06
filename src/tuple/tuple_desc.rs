@@ -1,6 +1,6 @@
 use data_type::DataType;
-use nom_sql::Literal;
 use internal_types::TupleData;
+use nom_sql::Literal;
 
 #[derive(Clone)]
 pub struct TupleDesc {
@@ -17,7 +17,10 @@ impl TupleDesc {
         assert_eq!(attr_types.len(), attr_names.len());
         TupleDesc {
             attr_types,
-            attr_names: attr_names.into_iter().map(|name| name.into()).collect(),
+            attr_names: attr_names
+                .into_iter()
+                .map(|name| name.into())
+                .collect(),
         }
     }
 
@@ -50,7 +53,10 @@ impl TupleDesc {
         result
     }
 
-    pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>) -> Vec<TupleData> {
+    pub fn data_from_literal(
+        &self,
+        inputs: Vec<Vec<Literal>>,
+    ) -> Vec<TupleData> {
         let mut tuples = vec![];
         for tup in inputs.iter() {
             let mut data = vec![];

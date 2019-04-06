@@ -46,20 +46,28 @@ impl TableItem {
         }
     }
 
-    pub fn read(&self) -> std::sync::LockResult<std::sync::RwLockReadGuard<BufPage>> {
+    pub fn read(
+        &self,
+    ) -> std::sync::LockResult<std::sync::RwLockReadGuard<BufPage>> {
         self.page.read()
     }
 
-    pub fn try_read(&self) -> std::sync::TryLockResult<std::sync::RwLockReadGuard<BufPage>> {
+    pub fn try_read(
+        &self,
+    ) -> std::sync::TryLockResult<std::sync::RwLockReadGuard<BufPage>> {
         self.page.try_read()
     }
 
-    pub fn write(&self) -> std::sync::LockResult<std::sync::RwLockWriteGuard<BufPage>> {
+    pub fn write(
+        &self,
+    ) -> std::sync::LockResult<std::sync::RwLockWriteGuard<BufPage>> {
         self.set_dirty();
         self.page.write()
     }
 
-    pub fn try_write(&self) -> std::sync::TryLockResult<std::sync::RwLockWriteGuard<BufPage>> {
+    pub fn try_write(
+        &self,
+    ) -> std::sync::TryLockResult<std::sync::RwLockWriteGuard<BufPage>> {
         self.set_dirty();
         self.page.try_write()
     }
@@ -82,7 +90,8 @@ impl evmap::ShallowCopy for TableItem {
 
 impl PartialEq for TableItem {
     fn eq(&self, other: &TableItem) -> bool {
-        Arc::ptr_eq(&self.page, &other.page) && Arc::ptr_eq(&self.info, &other.info)
+        Arc::ptr_eq(&self.page, &other.page)
+            && Arc::ptr_eq(&self.info, &other.info)
     }
 }
 
@@ -117,7 +126,10 @@ impl BufMgr {
         }
     }
 
-    pub fn start_persist(&self, log_mgr: &LogMgr) -> Result<(), std::io::Error> {
+    pub fn start_persist(
+        &self,
+        log_mgr: &LogMgr,
+    ) -> Result<(), std::io::Error> {
         let buf_mgr_clone = self.clone();
         let log_mgr_clone = log_mgr.clone();
         std::thread::spawn(move || {
@@ -164,14 +176,18 @@ impl BufMgr {
                     return Ok(());
                 }
 
-                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename(self.data_dir()))?;
+                let mut file = fs::OpenOptions::new()
+                    .write(true)
+                    .open(key.to_filename(self.data_dir()))?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(page_lock.buf().as_slice())?;
 
                 info_lock.dirty = false;
                 Ok(())
             }
-            None => Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found")),
+            None => {
+                Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
+            }
         }
     }
 
@@ -191,8 +207,11 @@ impl BufMgr {
         else {
             // If the offset is at the end of file, create new buf
             if utils::file_len(&key.to_filename(self.data_dir()))?
-                    == key.byte_offset() {
-                let mut file = fs::OpenOptions::new().write(true).open(key.to_filename(self.data_dir()))?;
+                == key.byte_offset()
+            {
+                let mut file = fs::OpenOptions::new()
+                    .write(true)
+                    .open(key.to_filename(self.data_dir()))?;
                 file.seek(io::SeekFrom::Start(key.byte_offset()))?;
                 file.write_all(&BufPage::default_buf())?;
             }
@@ -280,7 +299,7 @@ impl BufMgr {
 
             let cp_ptr = match log_mgr.create_checkpoint(&mut self) {
                 Ok(ptr) => ptr,
-                Err(e) => panic!("Creating checkpoint failed\nError: {:?}", e)
+                Err(e) => panic!("Creating checkpoint failed\nError: {:?}", e),
             };
 
             if let Err(e) = self.persist() {

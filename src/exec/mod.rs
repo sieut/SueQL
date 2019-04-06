@@ -1,12 +1,15 @@
 use db_state::DbState;
 use internal_types::ID;
+use meta::TABLE_REL_ID;
 use nom_sql;
 use nom_sql::SqlQuery;
-use meta::TABLE_REL_ID;
 use rel::Rel;
 use tuple;
 
-pub fn exec(query: SqlQuery, db_state: &mut DbState) -> Result<(), std::io::Error> {
+pub fn exec(
+    query: SqlQuery,
+    db_state: &mut DbState,
+) -> Result<(), std::io::Error> {
     match query {
         SqlQuery::CreateTable(stmt) => create_table(stmt, db_state),
         SqlQuery::Insert(stmt) => insert(stmt, db_state),
@@ -25,7 +28,9 @@ fn create_table(
     let attr_types: Vec<DataType> = stmt
         .fields
         .iter()
-        .map(|ref field| DataType::from_nom_type(field.sql_type.clone()).unwrap())
+        .map(|ref field| {
+            DataType::from_nom_type(field.sql_type.clone()).unwrap()
+        })
         .collect();
     let attr_names: Vec<String> = stmt
         .fields
@@ -37,7 +42,10 @@ fn create_table(
     Ok(())
 }
 
-fn select(stmt: nom_sql::SelectStatement, db_state: &mut DbState) -> Result<(), std::io::Error> {
+fn select(
+    stmt: nom_sql::SelectStatement,
+    db_state: &mut DbState,
+) -> Result<(), std::io::Error> {
     // Only Select from 1 table rn
     let table_id = get_table_id(stmt.tables[0].name.clone(), db_state)?;
     let rel = Rel::load(table_id, db_state)?;
@@ -56,7 +64,10 @@ fn select(stmt: nom_sql::SelectStatement, db_state: &mut DbState) -> Result<(), 
     Ok(())
 }
 
-fn insert(stmt: nom_sql::InsertStatement, db_state: &mut DbState) -> Result<(), std::io::Error> {
+fn insert(
+    stmt: nom_sql::InsertStatement,
+    db_state: &mut DbState,
+) -> Result<(), std::io::Error> {
     let table_id = get_table_id(stmt.table.name.clone(), db_state)?;
     let rel = Rel::load(table_id, db_state)?;
     let tuples = rel.data_from_literal(stmt.data.clone());
@@ -66,7 +77,10 @@ fn insert(stmt: nom_sql::InsertStatement, db_state: &mut DbState) -> Result<(), 
     Ok(())
 }
 
-fn get_table_id(name: String, db_state: &mut DbState) -> Result<ID, std::io::Error> {
+fn get_table_id(
+    name: String,
+    db_state: &mut DbState,
+) -> Result<ID, std::io::Error> {
     let rel = Rel::load(TABLE_REL_ID, db_state)?;
     let mut id = String::from("");
     rel.scan(
@@ -92,7 +106,9 @@ fn build_select_fields(
     for field in fields.iter() {
         match field {
             FieldDefinitionExpression::All => {
-                result.append(&mut (0..tuple_desc.num_attrs() as usize).collect());
+                result.append(
+                    &mut (0..tuple_desc.num_attrs() as usize).collect(),
+                );
             }
             FieldDefinitionExpression::Col(column) => {
                 result.push(tuple_desc.attr_index(&column.name).unwrap());

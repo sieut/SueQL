@@ -9,7 +9,10 @@ macro_rules! dbg_log {
     }
 }
 
-pub fn assert_data_len(data: &[u8], desired_len: usize) -> Result<(), std::io::Error> {
+pub fn assert_data_len(
+    data: &[u8],
+    desired_len: usize,
+) -> Result<(), std::io::Error> {
     if data.len() == desired_len {
         Ok(())
     } else {

@@ -2,9 +2,9 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use data_type::DataType;
 use db_state::State;
 use internal_types::{ID, LSN};
+use rel::Rel;
 use std::io::Cursor;
 use std::sync::{Arc, Mutex};
-use rel::Rel;
 use storage::buf_key::BufKey;
 use storage::buf_mgr::{BufMgr, TableItem};
 use tuple::tuple_desc::TupleDesc;
@@ -28,15 +28,17 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn create_and_load(buf_mgr: &mut BufMgr) -> Result<Meta, std::io::Error> {
+    pub fn create_and_load(
+        buf_mgr: &mut BufMgr,
+    ) -> Result<Meta, std::io::Error> {
         use std::io::ErrorKind;
 
         match Meta::load(buf_mgr) {
             Ok(meta) => Ok(meta),
             Err(e) => match e.kind() {
                 ErrorKind::NotFound => Meta::new(buf_mgr),
-                _ => panic!("Cannot create_and_load meta\n Error: {:?}", e)
-            }
+                _ => panic!("Cannot create_and_load meta\n Error: {:?}", e),
+            },
         }
     }
 
@@ -54,7 +56,11 @@ impl Meta {
         let mut cursor = Cursor::new(&lsn_data);
         let cur_lsn = Arc::new(Mutex::new(cursor.read_u32::<LittleEndian>()?));
 
-        Ok(Meta { buf: buf.clone(), cur_id, cur_lsn })
+        Ok(Meta {
+            buf: buf.clone(),
+            cur_id,
+            cur_lsn,
+        })
     }
 
     pub fn new(buf_mgr: &mut BufMgr) -> Result<Meta, std::io::Error> {
@@ -73,7 +79,7 @@ impl Meta {
         Ok(Meta {
             buf: buf.clone(),
             cur_id: Arc::new(Mutex::new(2)),
-            cur_lsn: Arc::new(Mutex::new(0))
+            cur_lsn: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -97,7 +103,7 @@ impl Meta {
     fn inc_counter(
         &self,
         cur_counter: u32,
-        ptr: &TuplePtr
+        ptr: &TuplePtr,
     ) -> Result<u32, std::io::Error> {
         let mut lock = self.buf.write().unwrap();
         let new_counter = cur_counter + 1;

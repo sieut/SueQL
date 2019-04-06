@@ -21,7 +21,9 @@ impl Storable for OpType {
         use std::io::{Error, ErrorKind};
         match OpType::from_u8(bytes[0]) {
             Some(op) => Ok((op, bytes[1..].to_vec())),
-            None => Err(Error::new(ErrorKind::InvalidData, "OpType does not exist")),
+            None => {
+                Err(Error::new(ErrorKind::InvalidData, "OpType does not exist"))
+            }
         }
     }
 

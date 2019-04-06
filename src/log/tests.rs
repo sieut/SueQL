@@ -1,4 +1,4 @@
-use db_state::{DbState, DbSettings};
+use db_state::{DbSettings, DbState};
 use log::{LogEntry, OpType, LOG_REL_ID};
 use storage::BufKey;
 
@@ -11,16 +11,23 @@ fn test_write_log_entries() {
         BufKey::new(3, 1),
         OpType::InsertTuple,
         vec![0u8; 4],
-        &mut db_state).unwrap();
+        &mut db_state,
+    )
+    .unwrap();
 
-    let entry_ptr = db_state.log_mgr.write_entries(
-        vec![entry.clone()], &mut db_state.buf_mgr).unwrap();
+    let entry_ptr = db_state
+        .log_mgr
+        .write_entries(vec![entry.clone()], &mut db_state.buf_mgr)
+        .unwrap();
 
-    let log_page = db_state.buf_mgr.get_buf(
-        &BufKey::new(LOG_REL_ID, 1)).unwrap();
+    let log_page = db_state
+        .buf_mgr
+        .get_buf(&BufKey::new(LOG_REL_ID, 1))
+        .unwrap();
     let guard = log_page.read().unwrap();
-    let written_entry = LogEntry::load(
-        guard.get_tuple_data(&entry_ptr[0]).unwrap().to_vec()).unwrap();
+    let written_entry =
+        LogEntry::load(guard.get_tuple_data(&entry_ptr[0]).unwrap().to_vec())
+            .unwrap();
 
     teardown(db_state, data_dir);
 
@@ -39,25 +46,39 @@ fn test_log_checkpoints() {
         BufKey::new(3, 1),
         OpType::InsertTuple,
         vec![0u8; 4],
-        &mut db_state).unwrap();
+        &mut db_state,
+    )
+    .unwrap();
 
     // Create first ever checkpoint
-    let cp_1 = db_state.log_mgr.create_checkpoint(
-        &mut db_state.buf_mgr).unwrap();
-    db_state.log_mgr.confirm_checkpoint(
-        cp_1, &mut db_state.buf_mgr).unwrap();
+    let cp_1 = db_state
+        .log_mgr
+        .create_checkpoint(&mut db_state.buf_mgr)
+        .unwrap();
+    db_state
+        .log_mgr
+        .confirm_checkpoint(cp_1, &mut db_state.buf_mgr)
+        .unwrap();
 
     // A checkpoint won't be created because there's no new entries
-    let cp_2 = db_state.log_mgr.create_checkpoint(
-        &mut db_state.buf_mgr).unwrap();
+    let cp_2 = db_state
+        .log_mgr
+        .create_checkpoint(&mut db_state.buf_mgr)
+        .unwrap();
 
     // A new checkpoint because there is a new entry
-    db_state.log_mgr.write_entries(
-        vec![entry], &mut db_state.buf_mgr).unwrap();
-    let cp_3 = db_state.log_mgr.create_checkpoint(
-        &mut db_state.buf_mgr).unwrap();
-    db_state.log_mgr.confirm_checkpoint(
-        cp_3, &mut db_state.buf_mgr).unwrap();
+    db_state
+        .log_mgr
+        .write_entries(vec![entry], &mut db_state.buf_mgr)
+        .unwrap();
+    let cp_3 = db_state
+        .log_mgr
+        .create_checkpoint(&mut db_state.buf_mgr)
+        .unwrap();
+    db_state
+        .log_mgr
+        .confirm_checkpoint(cp_3, &mut db_state.buf_mgr)
+        .unwrap();
 
     teardown(db_state, data_dir);
 
@@ -76,16 +97,16 @@ fn setup(data_dir: &str) -> DbState {
     use std::io::ErrorKind;
 
     match create_dir(data_dir) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => {},
-            _ => panic!("Error when setting up test: {:?}", e)
-        }
+            ErrorKind::AlreadyExists => {}
+            _ => panic!("Error when setting up test: {:?}", e),
+        },
     };
 
     let settings = DbSettings {
         buf_mgr_size: None,
-        data_dir: Some(data_dir.to_string())
+        data_dir: Some(data_dir.to_string()),
     };
 
     DbState::start_db(settings).unwrap()

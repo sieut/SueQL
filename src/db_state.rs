@@ -23,7 +23,12 @@ impl DbState {
 
         buf_mgr.start_persist(&log_mgr)?;
 
-        Ok(DbState { buf_mgr, log_mgr, meta, settings, })
+        Ok(DbState {
+            buf_mgr,
+            log_mgr,
+            meta,
+            settings,
+        })
     }
 
     pub fn shutdown(&mut self) -> Result<(), std::io::Error> {
@@ -44,7 +49,10 @@ pub struct DbSettings {
 
 impl DbSettings {
     pub fn default() -> DbSettings {
-        DbSettings { buf_mgr_size: None, data_dir: None }
+        DbSettings {
+            buf_mgr_size: None,
+            data_dir: None,
+        }
     }
 }
 
@@ -68,4 +76,3 @@ impl From<&[u8]> for State {
         State::from_u8(bytes[0]).unwrap()
     }
 }
-

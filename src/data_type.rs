@@ -127,7 +127,10 @@ impl DataType {
                 Some(bytes) => {
                     if bytes.len() >= 2 {
                         let mut cursor = Cursor::new(bytes);
-                        Some((cursor.read_u16::<LittleEndian>().unwrap() + 2) as usize)
+                        Some(
+                            (cursor.read_u16::<LittleEndian>().unwrap() + 2)
+                                as usize,
+                        )
                     } else {
                         None
                     }
@@ -188,7 +191,9 @@ impl DataType {
     }
 
     pub fn data_to_string(&self, bytes: &[u8]) -> Option<String> {
-        if bytes.len() == 0 || bytes.len() != self.data_size(Some(bytes)).unwrap_or(0) {
+        if bytes.len() == 0
+            || bytes.len() != self.data_size(Some(bytes)).unwrap_or(0)
+        {
             return None;
         }
 

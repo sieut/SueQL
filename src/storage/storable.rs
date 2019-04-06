@@ -27,7 +27,9 @@ macro_rules! storable_for_primitive {
                 std::mem::size_of::<$primitive>()
             }
 
-            fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
+            fn from_data(
+                bytes: Vec<u8>,
+            ) -> Result<(Self, Vec<u8>), std::io::Error> {
                 let mut cursor = Cursor::new(bytes);
                 let val = cursor.$parse_fn::<LittleEndian>()?;
                 let leftover_data = Self::leftover_data(cursor);

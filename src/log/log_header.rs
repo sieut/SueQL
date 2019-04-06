@@ -1,5 +1,5 @@
-use log::OpType;
 use internal_types::LSN;
+use log::OpType;
 use storage::{BufKey, Storable};
 
 #[derive(Clone, Debug, PartialEq, Eq)]

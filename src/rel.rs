@@ -4,7 +4,7 @@ use internal_types::ID;
 use meta;
 use nom_sql::Literal;
 use std::io::Cursor;
-use storage::{BufMgr, BufKey};
+use storage::{BufKey, BufMgr};
 use tuple::tuple_desc::TupleDesc;
 use tuple::tuple_ptr::TuplePtr;
 use utils;
@@ -28,7 +28,10 @@ pub struct Rel {
 }
 
 impl Rel {
-    pub fn load(rel_id: ID, db_state: &mut DbState) -> Result<Rel, std::io::Error> {
+    pub fn load(
+        rel_id: ID,
+        db_state: &mut DbState,
+    ) -> Result<Rel, std::io::Error> {
         let buf_page = db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
         let lock = buf_page.read().unwrap();
 
@@ -108,7 +111,7 @@ impl Rel {
     pub fn write_tuple(
         &self,
         data: &[u8],
-        db_state: &mut DbState
+        db_state: &mut DbState,
     ) -> Result<(), std::io::Error> {
         self.tuple_desc.assert_data_len(data)?;
 
@@ -116,7 +119,9 @@ impl Rel {
         let mut rel_lock = rel_meta.write().unwrap();
         let num_data_pages = rel_data_pages!(self, rel_lock);
 
-        let data_page = db_state.buf_mgr.get_buf(&BufKey::new(self.rel_id, num_data_pages as u64))?;
+        let data_page = db_state
+            .buf_mgr
+            .get_buf(&BufKey::new(self.rel_id, num_data_pages as u64))?;
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
@@ -125,12 +130,20 @@ impl Rel {
         }
         // Not enough space in page, have to create a new one
         else {
-            let new_page =
-                db_state.buf_mgr.new_buf(&BufKey::new(self.rel_id, (num_data_pages + 1) as u64))?;
+            let new_page = db_state.buf_mgr.new_buf(&BufKey::new(
+                self.rel_id,
+                (num_data_pages + 1) as u64,
+            ))?;
 
             let mut pages_data = vec![0u8; 4];
-            LittleEndian::write_u32(&mut pages_data, (num_data_pages + 1) as u32);
-            rel_lock.write_tuple_data(&pages_data, Some(&TuplePtr::new(self.meta_buf_key(), 0)))?;
+            LittleEndian::write_u32(
+                &mut pages_data,
+                (num_data_pages + 1) as u32,
+            );
+            rel_lock.write_tuple_data(
+                &pages_data,
+                Some(&TuplePtr::new(self.meta_buf_key(), 0)),
+            )?;
 
             let mut lock = new_page.write().unwrap();
             lock.write_tuple_data(data, None)?;
@@ -153,7 +166,9 @@ impl Rel {
         let num_data_pages = rel_data_pages!(self, rel_guard);
 
         for page_idx in 1..num_data_pages + 1 {
-            let page = db_state.buf_mgr.get_buf(&BufKey::new(self.rel_id, page_idx as u64))?;
+            let page = db_state
+                .buf_mgr
+                .get_buf(&BufKey::new(self.rel_id, page_idx as u64))?;
             let guard = page.read().unwrap();
             for tup in guard.iter() {
                 if filter(&*tup) {
@@ -181,7 +196,10 @@ impl Rel {
         self.tuple_desc.clone()
     }
 
-    fn write_new_rel(buf_mgr: &mut BufMgr, rel: &Rel) -> Result<(), std::io::Error> {
+    fn write_new_rel(
+        buf_mgr: &mut BufMgr,
+        rel: &Rel,
+    ) -> Result<(), std::io::Error> {
         // Create new data file
         let meta_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 0))?;
         let _first_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 1))?;

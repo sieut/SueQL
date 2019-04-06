@@ -31,7 +31,9 @@ fn test_write_new_tuple() {
         PAGE_SIZE - 16
     );
     // tuple_data
-    for byte in buf_page.buf()[(PAGE_SIZE - 16) as usize..PAGE_SIZE as usize].iter() {
+    for byte in
+        buf_page.buf()[(PAGE_SIZE - 16) as usize..PAGE_SIZE as usize].iter()
+    {
         assert_eq!(*byte, 5);
     }
 }

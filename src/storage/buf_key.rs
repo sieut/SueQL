@@ -13,9 +13,7 @@ impl BufKey {
     }
 
     pub fn to_filename(&self, data_dir: String) -> String {
-        format!("{}/{}.dat",
-                data_dir,
-                self.file_id)
+        format!("{}/{}.dat", data_dir, self.file_id)
     }
 
     pub fn byte_offset(&self) -> u64 {
