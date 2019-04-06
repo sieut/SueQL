@@ -3,9 +3,10 @@ use log::{LogHeader, OpType};
 use storage::{BufKey, Storable};
 use internal_types::TupleData;
 
+#[derive(Clone, Debug)]
 pub struct LogEntry {
-    header: LogHeader,
-    data: TupleData,
+    pub header: LogHeader,
+    pub data: TupleData,
 }
 
 impl LogEntry {

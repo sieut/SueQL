@@ -136,7 +136,7 @@ impl LogMgr {
             else {
                 let cur_page = buf_mgr.get_buf(&cur_key)?;
                 let cur_page_guard = cur_page.read().unwrap();
-                last_cp.buf_offset == cur_page_guard.tuple_count()
+                last_cp.buf_offset < cur_page_guard.tuple_count() - 1
             }
         };
 

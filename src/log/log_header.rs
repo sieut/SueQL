@@ -2,6 +2,7 @@ use log::OpType;
 use internal_types::LSN;
 use storage::{BufKey, Storable};
 
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogHeader {
     lsn: LSN,
     buf_key: BufKey,

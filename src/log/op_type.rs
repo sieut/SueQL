@@ -3,7 +3,7 @@ use enum_primitive::FromPrimitive;
 use storage::Storable;
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum OpType {
         InsertTuple,
         UpdateTuple,
