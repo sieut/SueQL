@@ -4,9 +4,9 @@ use storage::{BufKey, Storable};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LogHeader {
-    lsn: LSN,
-    buf_key: BufKey,
-    op: OpType,
+    pub lsn: LSN,
+    pub buf_key: BufKey,
+    pub op: OpType,
 }
 
 impl LogHeader {

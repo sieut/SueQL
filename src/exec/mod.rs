@@ -72,7 +72,7 @@ fn insert(
     let rel = Rel::load(table_id, db_state)?;
     let tuples = rel.data_from_literal(stmt.data.clone());
     for tup in tuples.iter() {
-        rel.write_tuple(&*tup, db_state)?;
+        rel.write_new_tuple(&*tup, db_state)?;
     }
     Ok(())
 }

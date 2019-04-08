@@ -11,7 +11,7 @@ fn test_write_new_tuple() {
 
     let mut buf_page = new_page();
     let test_data = [5; 16];
-    let tuple_ptr = buf_page.write_tuple_data(&test_data, None).unwrap();
+    let tuple_ptr = buf_page.write_tuple_data(&test_data, None, None).unwrap();
     assert_eq!(tuple_ptr.buf_offset, 0);
 
     let mut reader = Cursor::new(&buf_page.buf()[4..10]);
@@ -41,8 +41,8 @@ fn test_write_new_tuple() {
 #[test]
 fn test_get_tuple_data() {
     let mut buf_page = new_page();
-    buf_page.write_tuple_data(&[2u8; 8], None).unwrap();
-    buf_page.write_tuple_data(&[1u8; 16], None).unwrap();
+    buf_page.write_tuple_data(&[2u8; 8], None, None).unwrap();
+    buf_page.write_tuple_data(&[1u8; 16], None, None).unwrap();
 
     let invalid_tuple_ptr = TuplePtr::new(BufKey::new(0, 1), 4);
     assert!(buf_page.get_tuple_data(&invalid_tuple_ptr).is_err());
@@ -59,8 +59,8 @@ fn test_get_tuple_data() {
 #[test]
 fn test_buf_page_iter() {
     let mut buf_page = new_page();
-    buf_page.write_tuple_data(&[0u8; 8], None).unwrap();
-    buf_page.write_tuple_data(&[0u8; 16], None).unwrap();
+    buf_page.write_tuple_data(&[0u8; 8], None, None).unwrap();
+    buf_page.write_tuple_data(&[0u8; 16], None, None).unwrap();
 
     let mut iter = buf_page.iter();
     assert_eq!(iter.next().unwrap().len(), 8);

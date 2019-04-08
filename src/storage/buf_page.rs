@@ -57,6 +57,7 @@ impl BufPage {
         &mut self,
         tuple_data: &[u8],
         tuple_ptr: Option<&TuplePtr>,
+        lsn: Option<LSN>,
     ) -> Result<TuplePtr, std::io::Error> {
         let ret_offset;
 
@@ -115,8 +116,14 @@ impl BufPage {
             }
         };
 
+        // Write tuple
         self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
+        // Write lsn if given
+        LittleEndian::write_u32(
+            &mut self.buf[LSN_RANGE],
+            lsn.unwrap_or(self.lsn) as u32,
+        );
 
         Ok(TuplePtr::new(self.buf_key.clone(), ret_offset))
     }

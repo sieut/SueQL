@@ -40,6 +40,7 @@ impl LogMgr {
             meta_guard.write_tuple_data(
                 &LogMgr::default_checkpoint().to_data(),
                 None,
+                None,
             )?;
         }
 
@@ -112,9 +113,8 @@ impl LogMgr {
                             break;
                         } else {
                             ret.push(
-                                page_guard
-                                    .write_tuple_data(&entry.to_data(), None)?,
-                            );
+                                page_guard.write_tuple_data(
+                                    &entry.to_data(), None, None)?);
                         }
                     }
                     None => break,
@@ -176,9 +176,9 @@ impl LogMgr {
             let cp_entry = LogEntry::new_cp();
             // NOTE when update tuple in BufPage is implemented, change this
             log_guard
-                .write_tuple_data(&pending_cp.to_data(), Some(&LAST_CP_PTR))?;
+                .write_tuple_data(&pending_cp.to_data(), Some(&LAST_CP_PTR), None)?;
             page_guard
-                .write_tuple_data(&cp_entry.to_data(), Some(&pending_cp))?;
+                .write_tuple_data(&cp_entry.to_data(), Some(&pending_cp), None)?;
 
             last_cp_guard.buf_key = pending_cp.buf_key;
             last_cp_guard.buf_offset = pending_cp.buf_offset;

@@ -1,30 +1,20 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use db_state::DbState;
 use internal_types::ID;
+use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
 use std::io::Cursor;
-use storage::{BufKey, BufMgr};
+use storage::{BufKey, BufMgr, PAGE_SIZE};
 use tuple::tuple_desc::TupleDesc;
-use tuple::tuple_ptr::TuplePtr;
 use utils;
-
-#[macro_use]
-macro_rules! rel_data_pages {
-    ($rel:expr, $rel_lock:expr) => {{
-        let tup_ptr = TuplePtr::new($rel.meta_buf_key(), 0);
-        let data = $rel_lock.get_tuple_data(&tup_ptr)?;
-        utils::assert_data_len(&data, 4)?;
-        let mut cursor = Cursor::new(&data);
-        cursor.read_u32::<LittleEndian>()?
-    }};
-}
 
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
 pub struct Rel {
     rel_id: ID,
     tuple_desc: TupleDesc,
+    num_data_pages: usize,
 }
 
 impl Rel {
@@ -35,17 +25,10 @@ impl Rel {
         let buf_page = db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
         let lock = buf_page.read().unwrap();
 
-        // The data should have at least num_data_pages, num_attr, and an attr type
-        assert!(lock.tuple_count() >= 3);
+        // The data should have at least num_attr, and an attr type
+        assert!(lock.tuple_count() >= 2);
 
         let mut iter = lock.iter();
-        let _num_data_pages = {
-            let data = iter.next().unwrap();
-            utils::assert_data_len(&data, 4)?;
-            let mut cursor = Cursor::new(&data);
-            cursor.read_u32::<LittleEndian>()?
-        };
-
         let num_attr = {
             let data = iter.next().unwrap();
             utils::assert_data_len(&data, 4)?;
@@ -68,9 +51,13 @@ impl Rel {
             };
         }
 
+        let rel_filename = db_state.buf_mgr.key_to_filename(lock.buf_key());
+        let num_data_pages = utils::file_len(&rel_filename)? as usize / PAGE_SIZE;
+
         Ok(Rel {
             rel_id,
             tuple_desc: TupleDesc::from_data(&attr_data)?,
+            num_data_pages,
         })
     }
 
@@ -82,7 +69,7 @@ impl Rel {
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
         let rel_id = db_state.meta.get_new_id()?;
-        let rel = Rel { rel_id, tuple_desc };
+        let rel = Rel { rel_id, tuple_desc, num_data_pages: 1 };
 
         dbg_log!("Creating rel {} with id {}", name, rel_id);
 
@@ -92,7 +79,7 @@ impl Rel {
         let new_entry = table_rel
             .tuple_desc
             .create_tuple_data(vec![name, rel.rel_id.to_string()]);
-        table_rel.write_tuple(&new_entry, db_state)?;
+        table_rel.write_new_tuple(&new_entry, db_state)?;
 
         Ok(rel)
     }
@@ -103,12 +90,12 @@ impl Rel {
         tuple_desc: TupleDesc,
         buf_mgr: &mut BufMgr,
     ) -> Result<Rel, std::io::Error> {
-        let rel = Rel { rel_id, tuple_desc };
+        let rel = Rel { rel_id, tuple_desc, num_data_pages: 1 };
         Rel::write_new_rel(buf_mgr, &rel)?;
         Ok(rel)
     }
 
-    pub fn write_tuple(
+    pub fn write_new_tuple(
         &self,
         data: &[u8],
         db_state: &mut DbState,
@@ -116,37 +103,36 @@ impl Rel {
         self.tuple_desc.assert_data_len(data)?;
 
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
-        let mut rel_lock = rel_meta.write().unwrap();
-        let num_data_pages = rel_data_pages!(self, rel_lock);
+        let _rel_guard = rel_meta.write().unwrap();
 
         let data_page = db_state
             .buf_mgr
-            .get_buf(&BufKey::new(self.rel_id, num_data_pages as u64))?;
+            .get_buf(&BufKey::new(self.rel_id, self.num_data_pages as u64))?;
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
-            lock.write_tuple_data(data, None)?;
+            let log_entry = LogEntry::new(
+                lock.buf_key(), OpType::InsertTuple, data.to_vec(), db_state)?;
+            let lsn = log_entry.header.lsn;
+            db_state.log_mgr.write_entries(
+                vec![log_entry], &mut db_state.buf_mgr)?;
+            lock.write_tuple_data(data, None, Some(lsn))?;
             Ok(())
         }
         // Not enough space in page, have to create a new one
         else {
             let new_page = db_state.buf_mgr.new_buf(&BufKey::new(
                 self.rel_id,
-                (num_data_pages + 1) as u64,
+                (self.num_data_pages + 1) as u64,
             ))?;
-
-            let mut pages_data = vec![0u8; 4];
-            LittleEndian::write_u32(
-                &mut pages_data,
-                (num_data_pages + 1) as u32,
-            );
-            rel_lock.write_tuple_data(
-                &pages_data,
-                Some(&TuplePtr::new(self.meta_buf_key(), 0)),
-            )?;
-
             let mut lock = new_page.write().unwrap();
-            lock.write_tuple_data(data, None)?;
+
+            let log_entry = LogEntry::new(
+                lock.buf_key(), OpType::InsertTuple, data.to_vec(),db_state)?;
+            let lsn = log_entry.header.lsn;
+            db_state.log_mgr.write_entries(
+                vec![log_entry], &mut db_state.buf_mgr)?;
+            lock.write_tuple_data(data, None, Some(lsn))?;
             Ok(())
         }
     }
@@ -162,10 +148,9 @@ impl Rel {
         Then: FnMut(&[u8]),
     {
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
-        let rel_guard = rel_meta.read().unwrap();
-        let num_data_pages = rel_data_pages!(self, rel_guard);
+        let _rel_guard = rel_meta.read().unwrap();
 
-        for page_idx in 1..num_data_pages + 1 {
+        for page_idx in 1..self.num_data_pages + 1 {
             let page = db_state
                 .buf_mgr
                 .get_buf(&BufKey::new(self.rel_id, page_idx as u64))?;
@@ -204,24 +189,17 @@ impl Rel {
         let meta_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 0))?;
         let _first_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 1))?;
         let mut lock = meta_page.write().unwrap();
-
-        // Write num data pages
-        {
-            let mut data = vec![0u8; 4];
-            LittleEndian::write_u32(&mut data, 1);
-            lock.write_tuple_data(&data, None)?;
-        }
         // Write num attrs
         {
             let mut data = vec![0u8; 4];
             LittleEndian::write_u32(&mut data, rel.tuple_desc.num_attrs());
-            lock.write_tuple_data(&data, None)?;
+            lock.write_tuple_data(&data, None, None)?;
         }
         // Write tuple desc
         {
             let attrs_data = rel.tuple_desc.to_data();
             for tup in attrs_data.iter() {
-                lock.write_tuple_data(&tup, None)?;
+                lock.write_tuple_data(&tup, None, None)?;
             }
         }
         Ok(())

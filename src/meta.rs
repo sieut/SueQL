@@ -68,11 +68,11 @@ impl Meta {
         let mut guard = buf.write().unwrap();
         // State
         let state_data: Vec<u8> = State::Down.into();
-        guard.write_tuple_data(&state_data, None)?;
+        guard.write_tuple_data(&state_data, None, None)?;
         // ID Counter
-        guard.write_tuple_data(&Meta::default_id_counter(), None)?;
+        guard.write_tuple_data(&Meta::default_id_counter(), None, None)?;
         // LSN Counter
-        guard.write_tuple_data(&[0u8; 4], None)?;
+        guard.write_tuple_data(&[0u8; 4], None, None)?;
 
         Rel::new_meta_rel(TABLE_REL_ID, table_rel_desc(), buf_mgr)?;
 
@@ -86,7 +86,7 @@ impl Meta {
     pub fn set_state(&self, state: State) -> Result<(), std::io::Error> {
         let mut guard = self.buf.write().unwrap();
         let data: Vec<u8> = state.into();
-        guard.write_tuple_data(&data, Some(&STATE_PTR))?;
+        guard.write_tuple_data(&data, Some(&STATE_PTR), None)?;
         Ok(())
     }
 
@@ -109,7 +109,7 @@ impl Meta {
         let new_counter = cur_counter + 1;
         let mut data = vec![0u8; 4];
         LittleEndian::write_u32(&mut data, new_counter);
-        lock.write_tuple_data(&data[0..4], Some(&ptr))?;
+        lock.write_tuple_data(&data[0..4], Some(&ptr), None)?;
         Ok(new_counter)
     }
 

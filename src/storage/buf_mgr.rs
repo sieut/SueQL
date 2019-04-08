@@ -273,6 +273,10 @@ impl BufMgr {
         Ok(())
     }
 
+    pub fn key_to_filename(&self, key: BufKey) -> String {
+        key.to_filename(self.data_dir())
+    }
+
     fn get_item(&self, key: &BufKey) -> Option<TableItem> {
         self.buf_table_r.get_and(key, |items| items[0].clone())
     }
