@@ -91,26 +91,27 @@ impl Meta {
     }
 
     pub fn get_new_id(&self) -> Result<ID, std::io::Error> {
-        let cur_id = self.cur_id.lock().unwrap();
+        let mut cur_id = self.cur_id.lock().unwrap();
+        *cur_id += 1;
         self.inc_counter(*cur_id, &CUR_ID_PTR)
     }
 
     pub fn get_new_lsn(&self) -> Result<LSN, std::io::Error> {
-        let cur_lsn = self.cur_lsn.lock().unwrap();
+        let mut cur_lsn = self.cur_lsn.lock().unwrap();
+        *cur_lsn += 1;
         self.inc_counter(*cur_lsn, &CUR_LSN_PTR)
     }
 
     fn inc_counter(
         &self,
-        cur_counter: u32,
+        val: u32,
         ptr: &TuplePtr,
     ) -> Result<u32, std::io::Error> {
         let mut lock = self.buf.write().unwrap();
-        let new_counter = cur_counter + 1;
         let mut data = vec![0u8; 4];
-        LittleEndian::write_u32(&mut data, new_counter);
+        LittleEndian::write_u32(&mut data, val);
         lock.write_tuple_data(&data[0..4], Some(&ptr), None)?;
-        Ok(new_counter)
+        Ok(val)
     }
 
     const fn default_id_counter() -> [u8; 4] {

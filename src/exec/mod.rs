@@ -1,10 +1,9 @@
 use db_state::DbState;
-use internal_types::ID;
-use meta::TABLE_REL_ID;
 use nom_sql;
 use nom_sql::SqlQuery;
 use rel::Rel;
 use tuple;
+use utils;
 
 pub fn exec(
     query: SqlQuery,
@@ -47,7 +46,7 @@ fn select(
     db_state: &mut DbState,
 ) -> Result<(), std::io::Error> {
     // Only Select from 1 table rn
-    let table_id = get_table_id(stmt.tables[0].name.clone(), db_state)?;
+    let table_id = utils::get_table_id(stmt.tables[0].name.clone(), db_state)?;
     let rel = Rel::load(table_id, db_state)?;
     let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
 
@@ -68,32 +67,13 @@ fn insert(
     stmt: nom_sql::InsertStatement,
     db_state: &mut DbState,
 ) -> Result<(), std::io::Error> {
-    let table_id = get_table_id(stmt.table.name.clone(), db_state)?;
+    let table_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
     let rel = Rel::load(table_id, db_state)?;
     let tuples = rel.data_from_literal(stmt.data.clone());
     for tup in tuples.iter() {
         rel.write_new_tuple(&*tup, db_state)?;
     }
     Ok(())
-}
-
-fn get_table_id(
-    name: String,
-    db_state: &mut DbState,
-) -> Result<ID, std::io::Error> {
-    let rel = Rel::load(TABLE_REL_ID, db_state)?;
-    let mut id = String::from("");
-    rel.scan(
-        db_state,
-        |data| {
-            let vals = rel.data_to_strings(data, None).unwrap();
-            vals[0].clone() == name
-        },
-        |data| {
-            id = rel.data_to_strings(data, None).unwrap()[1].clone();
-        },
-    )?;
-    Ok(id.parse::<ID>().unwrap())
 }
 
 fn build_select_fields(

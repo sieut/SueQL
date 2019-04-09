@@ -17,11 +17,11 @@ const LOWER_PTR_RANGE: std::ops::Range<usize> = (6..8);
 pub struct BufPage {
     buf: Vec<u8>,
     // Values in page's header
-    lsn: LSN,
-    upper_ptr: PagePtr,
-    lower_ptr: PagePtr,
+    pub lsn: LSN,
+    pub upper_ptr: PagePtr,
+    pub lower_ptr: PagePtr,
     // BufKey for assertions
-    buf_key: BufKey,
+    pub buf_key: BufKey,
 }
 
 pub type PagePtr = usize;
@@ -119,11 +119,9 @@ impl BufPage {
         // Write tuple
         self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
-        // Write lsn if given
-        LittleEndian::write_u32(
-            &mut self.buf[LSN_RANGE],
-            lsn.unwrap_or(self.lsn) as u32,
-        );
+        // Write lsn
+        self.lsn = lsn.unwrap_or(self.lsn);
+        LittleEndian::write_u32(&mut self.buf[LSN_RANGE], self.lsn as u32);
 
         Ok(TuplePtr::new(self.buf_key.clone(), ret_offset))
     }

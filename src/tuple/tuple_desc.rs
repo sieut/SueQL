@@ -2,7 +2,7 @@ use data_type::DataType;
 use internal_types::TupleData;
 use nom_sql::Literal;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TupleDesc {
     attr_types: Vec<DataType>,
     attr_names: Vec<String>,
@@ -133,6 +133,10 @@ impl TupleDesc {
 
     pub fn num_attrs(&self) -> u32 {
         self.attr_types.len() as u32
+    }
+
+    pub fn attr_types(&self) -> Vec<DataType> {
+        self.attr_types.clone()
     }
 
     pub fn attr_names(&self) -> Vec<String> {

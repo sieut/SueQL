@@ -6,13 +6,14 @@ use meta;
 use nom_sql::Literal;
 use std::io::Cursor;
 use storage::{BufKey, BufMgr, PAGE_SIZE};
-use tuple::tuple_desc::TupleDesc;
+use tuple::{TupleDesc, TuplePtr};
 use utils;
 
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
+#[derive(Debug)]
 pub struct Rel {
-    rel_id: ID,
+    pub rel_id: ID,
     tuple_desc: TupleDesc,
     num_data_pages: usize,
 }
@@ -52,7 +53,8 @@ impl Rel {
         }
 
         let rel_filename = db_state.buf_mgr.key_to_filename(lock.buf_key());
-        let num_data_pages = utils::file_len(&rel_filename)? as usize / PAGE_SIZE;
+        let num_data_pages =
+            utils::file_len(&rel_filename)? as usize / PAGE_SIZE - 1;
 
         Ok(Rel {
             rel_id,
@@ -63,15 +65,18 @@ impl Rel {
 
     /// Create a new non-SueQL-controlled Relation (table),
     /// must be used when executing CREATE TABLE
-    pub fn new(
-        name: String,
+    pub fn new<S: Into<String>>(
+        name: S,
         tuple_desc: TupleDesc,
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
         let rel_id = db_state.meta.get_new_id()?;
-        let rel = Rel { rel_id, tuple_desc, num_data_pages: 1 };
-
-        dbg_log!("Creating rel {} with id {}", name, rel_id);
+        let rel = Rel {
+            rel_id,
+            tuple_desc,
+            num_data_pages: 1,
+        };
+        let name: String = name.into();
 
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         // Add an entry to the table info rel
@@ -90,7 +95,11 @@ impl Rel {
         tuple_desc: TupleDesc,
         buf_mgr: &mut BufMgr,
     ) -> Result<Rel, std::io::Error> {
-        let rel = Rel { rel_id, tuple_desc, num_data_pages: 1 };
+        let rel = Rel {
+            rel_id,
+            tuple_desc,
+            num_data_pages: 1,
+        };
         Rel::write_new_rel(buf_mgr, &rel)?;
         Ok(rel)
     }
@@ -99,7 +108,7 @@ impl Rel {
         &self,
         data: &[u8],
         db_state: &mut DbState,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<TuplePtr, std::io::Error> {
         self.tuple_desc.assert_data_len(data)?;
 
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
@@ -112,12 +121,16 @@ impl Rel {
 
         if lock.available_data_space() >= data.len() {
             let log_entry = LogEntry::new(
-                lock.buf_key(), OpType::InsertTuple, data.to_vec(), db_state)?;
+                lock.buf_key(),
+                OpType::InsertTuple,
+                data.to_vec(),
+                db_state,
+            )?;
             let lsn = log_entry.header.lsn;
-            db_state.log_mgr.write_entries(
-                vec![log_entry], &mut db_state.buf_mgr)?;
-            lock.write_tuple_data(data, None, Some(lsn))?;
-            Ok(())
+            db_state
+                .log_mgr
+                .write_entries(vec![log_entry], &mut db_state.buf_mgr)?;
+            lock.write_tuple_data(data, None, Some(lsn))
         }
         // Not enough space in page, have to create a new one
         else {
@@ -128,12 +141,16 @@ impl Rel {
             let mut lock = new_page.write().unwrap();
 
             let log_entry = LogEntry::new(
-                lock.buf_key(), OpType::InsertTuple, data.to_vec(),db_state)?;
+                lock.buf_key(),
+                OpType::InsertTuple,
+                data.to_vec(),
+                db_state,
+            )?;
             let lsn = log_entry.header.lsn;
-            db_state.log_mgr.write_entries(
-                vec![log_entry], &mut db_state.buf_mgr)?;
-            lock.write_tuple_data(data, None, Some(lsn))?;
-            Ok(())
+            db_state
+                .log_mgr
+                .write_entries(vec![log_entry], &mut db_state.buf_mgr)?;
+            lock.write_tuple_data(data, None, Some(lsn))
         }
     }
 
@@ -213,3 +230,6 @@ impl Rel {
         format!("{}.dat", self.rel_id)
     }
 }
+
+#[cfg(test)]
+mod tests;

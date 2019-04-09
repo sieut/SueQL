@@ -6,7 +6,7 @@ use nom_sql::{Literal, SqlType};
 use std::io::Cursor;
 
 enum_from_primitive! {
-    #[derive(Debug, Copy, Clone)]
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum DataType {
         Char,
         U32,
@@ -70,7 +70,10 @@ impl DataType {
                 &Literal::String(ref string) => string.len() == 1,
                 _ => false,
             },
-            &DataType::I32 => match input {
+            &DataType::I32
+            | &DataType::U32
+            | &DataType::I64
+            | &DataType::U64 => match input {
                 &Literal::Integer(_) => true,
                 _ => false,
             },
@@ -87,6 +90,7 @@ impl DataType {
             return None;
         }
 
+        let data_size = self.data_size(None);
         match self {
             &DataType::Char => {
                 if let &Literal::String(ref string) = input {
@@ -95,10 +99,21 @@ impl DataType {
                     None
                 }
             }
-            &DataType::I32 => {
+            &DataType::I32 | &DataType::I64 => {
                 if let &Literal::Integer(int) = input {
-                    let mut bytes = vec![0u8; 4];
-                    LittleEndian::write_i32(&mut bytes, int as i32);
+                    let n_bytes = data_size.unwrap();
+                    let mut bytes = vec![0u8; n_bytes];
+                    LittleEndian::write_int(&mut bytes, int, n_bytes);
+                    Some(bytes)
+                } else {
+                    None
+                }
+            }
+            &DataType::U32 | &DataType::U64 => {
+                if let &Literal::Integer(int) = input {
+                    let n_bytes = data_size.unwrap();
+                    let mut bytes = vec![0u8; n_bytes];
+                    LittleEndian::write_uint(&mut bytes, int as u64, n_bytes);
                     Some(bytes)
                 } else {
                     None

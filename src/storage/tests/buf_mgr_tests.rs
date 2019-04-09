@@ -24,7 +24,8 @@ fn test_bufmgr_store() {
         let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0)).unwrap();
         // Change values in buf_page
         let mut lock = buf_page.write().unwrap();
-        lock.write_tuple_data(&vec![1, 1, 1, 1], None, None).unwrap();
+        lock.write_tuple_data(&vec![1, 1, 1, 1], None, None)
+            .unwrap();
     }
     // Write buf page
     buf_mgr.store_buf(&BufKey::new(0, 0), None).unwrap();

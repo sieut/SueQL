@@ -1,3 +1,7 @@
+use db_state::DbState;
+use internal_types::ID;
+use meta::TABLE_REL_ID;
+use rel::Rel;
 use std::fs::File;
 use std::io::Write;
 
@@ -41,4 +45,23 @@ pub fn file_len(fname: &str) -> Result<u64, std::io::Error> {
     } else {
         Ok(file_meta.len())
     }
+}
+
+pub fn get_table_id(
+    name: String,
+    db_state: &mut DbState,
+) -> Result<ID, std::io::Error> {
+    let rel = Rel::load(TABLE_REL_ID, db_state)?;
+    let mut id = String::from("");
+    rel.scan(
+        db_state,
+        |data| {
+            let vals = rel.data_to_strings(data, None).unwrap();
+            vals[0].clone() == name
+        },
+        |data| {
+            id = rel.data_to_strings(data, None).unwrap()[1].clone();
+        },
+    )?;
+    Ok(id.parse::<ID>().unwrap())
 }
