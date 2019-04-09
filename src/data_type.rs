@@ -81,7 +81,6 @@ impl DataType {
                 &Literal::String(_) => true,
                 _ => false,
             },
-            _ => false,
         }
     }
 
@@ -129,7 +128,6 @@ impl DataType {
                     None
                 }
             }
-            _ => None,
         }
     }
 

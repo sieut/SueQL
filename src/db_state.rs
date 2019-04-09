@@ -15,6 +15,9 @@ pub struct DbState {
 
 impl DbState {
     pub fn start_db(settings: DbSettings) -> Result<DbState, std::io::Error> {
+        let data_dir = settings.clone().data_dir.unwrap_or("data".to_string());
+        DbState::create_data_dir(data_dir)?;
+
         dbg_log!("Starting SueQL database");
         let mut buf_mgr = BufMgr::new(settings.clone());
         let log_mgr = LogMgr::create_and_load(&mut buf_mgr)?;
@@ -38,6 +41,20 @@ impl DbState {
         // NOTE: might be slow and extra here if BufMgr is already persisting
         self.buf_mgr.persist()?;
         Ok(())
+    }
+
+    fn create_data_dir<S: Into<String>>(data_dir: S) -> Result<(), std::io::Error> {
+        use std::fs::create_dir;
+        use std::io::ErrorKind;
+
+        let data_dir = data_dir.into();
+        match create_dir(data_dir) {
+            Ok(_) => Ok(()),
+            Err(e) => match e.kind() {
+                ErrorKind::AlreadyExists => Ok(()),
+                _ => Err(e)
+            }
+        }
     }
 }
 
