@@ -8,10 +8,10 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
  - [ ] WAL
     - [ ] LogMgr
         - [X] Write entries to disk
-        - [ ] Checkpointing
+        - [X] Checkpointing
             - [X] Only if there are new log entries
         - [ ] Recovery
-    - [ ] WAL on writes
+    - [X] WAL on writes
     - [ ] Tests
  - [ ] Advanced exec nodes
  - [ ] Optimizer
