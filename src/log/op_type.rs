@@ -6,7 +6,7 @@ enum_from_primitive! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
     pub enum OpType {
         InsertTuple,
-        UpdateTuple,
+        // UpdateTuple,
         Checkpoint,
         PendingCheckpoint,
     }

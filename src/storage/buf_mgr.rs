@@ -29,6 +29,9 @@ macro_rules! remove {
     };
 }
 
+pub type WriteGuard<'a> = std::sync::RwLockWriteGuard<'a, BufPage>;
+pub type ReadGuard<'a> = std::sync::RwLockReadGuard<'a, BufPage>;
+
 #[derive(Clone, Debug)]
 pub struct TableItem {
     page: Arc<RwLock<BufPage>>,
@@ -46,28 +49,20 @@ impl TableItem {
         }
     }
 
-    pub fn read(
-        &self,
-    ) -> std::sync::LockResult<std::sync::RwLockReadGuard<BufPage>> {
+    pub fn read(&self) -> std::sync::LockResult<ReadGuard> {
         self.page.read()
     }
 
-    pub fn try_read(
-        &self,
-    ) -> std::sync::TryLockResult<std::sync::RwLockReadGuard<BufPage>> {
+    pub fn try_read(&self) -> std::sync::TryLockResult<ReadGuard> {
         self.page.try_read()
     }
 
-    pub fn write(
-        &self,
-    ) -> std::sync::LockResult<std::sync::RwLockWriteGuard<BufPage>> {
+    pub fn write(&self) -> std::sync::LockResult<WriteGuard> {
         self.set_dirty();
         self.page.write()
     }
 
-    pub fn try_write(
-        &self,
-    ) -> std::sync::TryLockResult<std::sync::RwLockWriteGuard<BufPage>> {
+    pub fn try_write(&self) -> std::sync::TryLockResult<WriteGuard> {
         self.set_dirty();
         self.page.try_write()
     }

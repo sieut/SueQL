@@ -1,5 +1,5 @@
 use internal_types::ID;
-use log::LogEntry;
+use log::{LogEntry, OpType};
 use std::sync::{Arc, RwLock};
 use storage::buf_mgr::TableItem;
 use storage::{BufKey, BufMgr, Storable};
@@ -75,11 +75,14 @@ impl LogMgr {
             log_file_len / PAGE_SIZE as u64 - 1,
         )));
 
-        Ok(LogMgr {
+        let mut log_mgr = LogMgr {
             meta_page,
             cur_page_key,
             last_cp: Arc::new(RwLock::new(last_cp)),
-        })
+        }
+        log_mgr.recover(buf_mgr)?;
+
+        Ok(log_mgr)
     }
 
     pub fn write_entries<E>(
@@ -194,6 +197,78 @@ impl LogMgr {
 
         buf_mgr.store_buf(&pending_cp.buf_key, None)?;
         Ok(())
+    }
+
+    fn recover(&mut self, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
+        if !self.should_redo(buf_mgr)? {
+            return Ok(());
+        }
+
+        let last_page_key = self.cur_page_key.read().unwrap().clone();
+        let (mut cur_key, mut skip) = {
+            let cp_guard = self.last_cp.read().unwrap();
+            (cp_guard.buf_key, cp_guard.buf_offset + 1)
+        };
+        loop {
+            let log_page = buf_mgr.get_buf(&cur_key)?;
+            let page_guard = log_page.read().unwrap();
+
+            for data in page_guard.iter().skip(skip) {
+                let entry = LogEntry::load(data.to_vec())?;
+                let buf = buf_mgr.get_buf(&entry.header.buf_key)?;
+                let mut buf_guard = buf.write().unwrap();
+
+                if buf_guard.lsn >= entry.header.lsn {
+                    continue;
+                }
+
+                match entry.header.op {
+                    OpType::InsertTuple => {
+                        buf_guard.write_tuple_data(
+                            &entry.data,
+                            None,
+                            Some(entry.header.lsn),
+                            )?;
+                    }
+                    // TODO this entry should be deleted, but not possible yet
+                    OpType::PendingCheckpoint => {}
+                    _ => {}
+                };
+            }
+
+            if page_guard.buf_key == last_page_key {
+                break;
+            }
+            cur_key.offset += 1;
+            skip = 0;
+        }
+
+        // Create a new Checkpoint and persist
+        let new_cp_ptr = self.create_checkpoint(buf_mgr)?;
+        buf_mgr.persist()?;
+        self.confirm_checkpoint(new_cp_ptr, buf_mgr)?;
+
+        Ok(())
+    }
+
+    fn should_redo(
+        &self,
+        buf_mgr: &mut BufMgr
+    ) -> Result<bool, std::io::Error> {
+        let key_guard = self.cur_page_key.read().unwrap();
+        let cur_page = buf_mgr.get_buf(&key_guard)?;
+        let page_guard = cur_page.write().unwrap();
+
+        let last_entry_ptr =
+            TuplePtr::new(*key_guard, page_guard.tuple_count() - 1);
+        let last_entry = LogEntry::load(
+            page_guard.get_tuple_data(&last_entry_ptr)?.to_vec(),
+        )?;
+
+        match last_entry.header.op {
+            OpType::Checkpoint => Ok(false),
+            _ => Ok(true),
+        }
     }
 
     /// Placeholder checkpoint when the log file is first created

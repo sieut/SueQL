@@ -38,8 +38,8 @@ fn test_bufmgr_store() {
     teardown_bufmgr(data_dir);
 
     let lock = buf_page.read().unwrap();
-    assert_eq!(lock.upper_ptr(), PAGE_SIZE - 4);
-    assert_eq!(lock.lower_ptr(), HEADER_SIZE + 4);
+    assert_eq!(lock.upper_ptr, PAGE_SIZE - 4);
+    assert_eq!(lock.lower_ptr, HEADER_SIZE + 4);
     assert_eq!(lock.iter().next().unwrap().to_vec(), vec![1, 1, 1, 1]);
 }
 

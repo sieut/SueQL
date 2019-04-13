@@ -148,20 +148,8 @@ impl BufPage {
         }
     }
 
-    pub fn upper_ptr(&self) -> PagePtr {
-        self.upper_ptr
-    }
-
-    pub fn lower_ptr(&self) -> PagePtr {
-        self.lower_ptr
-    }
-
     pub fn buf(&self) -> &Vec<u8> {
         &self.buf
-    }
-
-    pub fn buf_key(&self) -> BufKey {
-        self.buf_key.clone()
     }
 
     fn offset_to_ptr(buf_offset: usize) -> PagePtr {

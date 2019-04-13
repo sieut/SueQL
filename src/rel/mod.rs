@@ -52,7 +52,7 @@ impl Rel {
             };
         }
 
-        let rel_filename = db_state.buf_mgr.key_to_filename(lock.buf_key());
+        let rel_filename = db_state.buf_mgr.key_to_filename(lock.buf_key);
         let num_data_pages =
             utils::file_len(&rel_filename)? as usize / PAGE_SIZE - 1;
 
@@ -121,7 +121,7 @@ impl Rel {
 
         if lock.available_data_space() >= data.len() {
             let log_entry = LogEntry::new(
-                lock.buf_key(),
+                lock.buf_key,
                 OpType::InsertTuple,
                 data.to_vec(),
                 db_state,
@@ -141,7 +141,7 @@ impl Rel {
             let mut lock = new_page.write().unwrap();
 
             let log_entry = LogEntry::new(
-                lock.buf_key(),
+                lock.buf_key,
                 OpType::InsertTuple,
                 data.to_vec(),
                 db_state,

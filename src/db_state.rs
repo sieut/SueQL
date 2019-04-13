@@ -43,7 +43,9 @@ impl DbState {
         Ok(())
     }
 
-    fn create_data_dir<S: Into<String>>(data_dir: S) -> Result<(), std::io::Error> {
+    fn create_data_dir<S: Into<String>>(
+        data_dir: S,
+    ) -> Result<(), std::io::Error> {
         use std::fs::create_dir;
         use std::io::ErrorKind;
 
@@ -52,8 +54,8 @@ impl DbState {
             Ok(_) => Ok(()),
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => Ok(()),
-                _ => Err(e)
-            }
+                _ => Err(e),
+            },
         }
     }
 }
