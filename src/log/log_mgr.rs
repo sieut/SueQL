@@ -79,7 +79,7 @@ impl LogMgr {
             meta_page,
             cur_page_key,
             last_cp: Arc::new(RwLock::new(last_cp)),
-        }
+        };
         log_mgr.recover(buf_mgr)?;
 
         Ok(log_mgr)

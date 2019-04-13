@@ -1,7 +1,7 @@
 use data_type::DataType;
 use db_state::{DbSettings, DbState};
 use log::LogMgr;
-use meta::{Meta, TABLE_REL_ID};
+use meta::Meta;
 use rel::Rel;
 use storage::BufMgr;
 use tuple::TupleDesc;

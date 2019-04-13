@@ -1,6 +1,10 @@
+use data_type::DataType;
 use db_state::{DbSettings, DbState};
-use log::{LogEntry, OpType, LOG_REL_ID};
-use storage::BufKey;
+use log::{LogEntry, LogMgr, OpType, LOG_REL_ID};
+use meta::Meta;
+use rel::Rel;
+use storage::{BufKey, BufMgr};
+use tuple::TupleDesc;
 
 #[test]
 fn test_write_log_entries() {
@@ -92,6 +96,81 @@ fn test_log_checkpoints() {
     assert_eq!(cp_3.buf_offset, 2);
 }
 
+#[test]
+fn test_recovery() {
+    use nom_sql::Literal;
+
+    let data_dir = "test_recovery";
+    let mut db_state = setup(data_dir);
+    // Create a Rel
+    let desc = TupleDesc::new(
+        vec![DataType::Char, DataType::U32],
+        vec!["char", "u32"],
+    );
+    let rel = Rel::new("rel", desc.clone(), &mut db_state).unwrap();
+    let rel_id = rel.rel_id;
+    // Persist the Rel creation
+    db_state.buf_mgr.persist().unwrap();
+    // Insert 2 tuples, there will be 2 uncheckpointed entries after this
+    let tuples = rel.data_from_literal(vec![
+        vec![
+            Literal::String("a".to_string()),
+            Literal::Integer(1),
+        ],
+        vec![
+            Literal::String("b".to_string()),
+            Literal::Integer(2),
+        ]
+    ]);
+    rel.write_new_tuple(&tuples[0], &mut db_state).unwrap();
+    rel.write_new_tuple(&tuples[1], &mut db_state).unwrap();
+
+    // Restart db, basically
+    let mut db_state = setup(data_dir);
+    // Load the Rel and check for the tuples
+    let rel = Rel::load(rel_id, &mut db_state).unwrap();
+    let mut written_tuples = vec![];
+    rel.scan(
+        &mut db_state,
+        |_| true,
+        |data| { written_tuples.push(data.to_vec()); }
+    ).unwrap();
+
+    teardown(db_state, data_dir);
+
+    assert_eq!(written_tuples.len(), 2);
+    let data1 = rel.data_to_strings(&written_tuples[0], None).unwrap();
+    assert_eq!(data1[0], "a");
+    assert_eq!(data1[1], "1");
+    let data2 = rel.data_to_strings(&written_tuples[1], None).unwrap();
+    assert_eq!(data2[0], "b");
+    assert_eq!(data2[1], "2");
+}
+
+#[test]
+#[ignore]
+// TODO This test does not pass because new rel is not an OpType
+fn test_recover_new_rel() {
+    let data_dir = "test_recover_new_rel";
+    let mut db_state = setup(data_dir);
+    // Persist the DB creation
+    db_state.buf_mgr.persist().unwrap();
+    // Create a Rel
+    let desc = TupleDesc::new(
+        vec![DataType::Char, DataType::U32],
+        vec!["char", "u32"],
+    );
+    let rel = Rel::new("rel", desc.clone(), &mut db_state).unwrap();
+    let rel_id = rel.rel_id;
+    // Restart db, basically
+    let mut db_state = setup(data_dir);
+    // Load the Rel
+    let rel = Rel::load(rel_id, &mut db_state).unwrap();
+    teardown(db_state, data_dir);
+
+    assert_eq!(rel.tuple_desc(), desc);
+}
+
 fn setup(data_dir: &str) -> DbState {
     use std::fs::create_dir;
     use std::io::ErrorKind;
@@ -109,7 +188,15 @@ fn setup(data_dir: &str) -> DbState {
         data_dir: Some(data_dir.to_string()),
     };
 
-    DbState::start_db(settings).unwrap()
+    let mut buf_mgr = BufMgr::new(settings.clone());
+    let log_mgr = LogMgr::create_and_load(&mut buf_mgr).unwrap();
+    let meta = Meta::create_and_load(&mut buf_mgr).unwrap();
+    DbState {
+        buf_mgr,
+        log_mgr,
+        meta,
+        settings,
+    }
 }
 
 fn teardown(mut db_state: DbState, data_dir: &str) {
