@@ -27,8 +27,11 @@ impl LogEntry {
     }
 
     pub fn new_pending_cp() -> LogEntry {
-        let header =
-            LogHeader::new(0, BufKey::new(0, 0), OpType::PendingCheckpoint);
+        let header = LogHeader::new(
+            0,
+            BufKey::new(0, 0, false),
+            OpType::PendingCheckpoint,
+        );
         LogEntry {
             header,
             data: vec![],
@@ -36,7 +39,8 @@ impl LogEntry {
     }
 
     pub fn new_cp() -> LogEntry {
-        let header = LogHeader::new(0, BufKey::new(0, 0), OpType::Checkpoint);
+        let header =
+            LogHeader::new(0, BufKey::new(0, 0, false), OpType::Checkpoint);
         LogEntry {
             header,
             data: vec![],

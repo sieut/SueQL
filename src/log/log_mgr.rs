@@ -6,7 +6,7 @@ use storage::{BufKey, BufMgr, Storable};
 use tuple::TuplePtr;
 
 pub static LOG_REL_ID: ID = 2;
-static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0);
+static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0, false);
 static LAST_CP_PTR: TuplePtr = TuplePtr::new(LOG_META_KEY, 0);
 
 #[derive(Clone, Debug)]
@@ -44,8 +44,10 @@ impl LogMgr {
             )?;
         }
 
-        let _first_page = buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1))?;
-        let cur_page_key = Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1)));
+        let _first_page =
+            buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1, false))?;
+        let cur_page_key =
+            Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1, false)));
 
         Ok(LogMgr {
             meta_page,
@@ -73,6 +75,7 @@ impl LogMgr {
         let cur_page_key = Arc::new(RwLock::new(BufKey::new(
             LOG_REL_ID,
             log_file_len / PAGE_SIZE as u64 - 1,
+            false,
         )));
 
         let mut log_mgr = LogMgr {
@@ -228,7 +231,7 @@ impl LogMgr {
                             &entry.data,
                             None,
                             Some(entry.header.lsn),
-                            )?;
+                        )?;
                     }
                     // TODO this entry should be deleted, but not possible yet
                     OpType::PendingCheckpoint => {}
@@ -253,7 +256,7 @@ impl LogMgr {
 
     fn should_redo(
         &self,
-        buf_mgr: &mut BufMgr
+        buf_mgr: &mut BufMgr,
     ) -> Result<bool, std::io::Error> {
         let key_guard = self.cur_page_key.read().unwrap();
         let cur_page = buf_mgr.get_buf(&key_guard)?;

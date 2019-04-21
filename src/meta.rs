@@ -12,9 +12,9 @@ use tuple::tuple_ptr::TuplePtr;
 use utils;
 
 pub static META_REL_ID: ID = 0;
-pub static META_BUF_KEY: BufKey = BufKey::new(META_REL_ID, 0);
+pub static META_BUF_KEY: BufKey = BufKey::new(META_REL_ID, 0, false);
 pub static TABLE_REL_ID: ID = 1;
-pub static TABLE_BUF_KEY: BufKey = BufKey::new(TABLE_REL_ID, 0);
+pub static TABLE_BUF_KEY: BufKey = BufKey::new(TABLE_REL_ID, 0, false);
 static STATE_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 0);
 static CUR_ID_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 1);
 static CUR_LSN_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 2);

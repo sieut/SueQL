@@ -23,7 +23,8 @@ impl Rel {
         rel_id: ID,
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
-        let buf_page = db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0))?;
+        let buf_page =
+            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, false))?;
         let lock = buf_page.read().unwrap();
 
         // The data should have at least num_attr, and an attr type
@@ -114,9 +115,11 @@ impl Rel {
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let _rel_guard = rel_meta.write().unwrap();
 
-        let data_page = db_state
-            .buf_mgr
-            .get_buf(&BufKey::new(self.rel_id, self.num_data_pages as u64))?;
+        let data_page = db_state.buf_mgr.get_buf(&BufKey::new(
+            self.rel_id,
+            self.num_data_pages as u64,
+            false,
+        ))?;
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
@@ -137,6 +140,7 @@ impl Rel {
             let new_page = db_state.buf_mgr.new_buf(&BufKey::new(
                 self.rel_id,
                 (self.num_data_pages + 1) as u64,
+                false,
             ))?;
             let mut lock = new_page.write().unwrap();
 
@@ -168,9 +172,11 @@ impl Rel {
         let _rel_guard = rel_meta.read().unwrap();
 
         for page_idx in 1..self.num_data_pages + 1 {
-            let page = db_state
-                .buf_mgr
-                .get_buf(&BufKey::new(self.rel_id, page_idx as u64))?;
+            let page = db_state.buf_mgr.get_buf(&BufKey::new(
+                self.rel_id,
+                page_idx as u64,
+                false,
+            ))?;
             let guard = page.read().unwrap();
             for tup in guard.iter() {
                 if filter(&*tup) {
@@ -203,8 +209,9 @@ impl Rel {
         rel: &Rel,
     ) -> Result<(), std::io::Error> {
         // Create new data file
-        let meta_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 0))?;
-        let _first_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 1))?;
+        let meta_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 0, false))?;
+        let _first_page =
+            buf_mgr.new_buf(&BufKey::new(rel.rel_id, 1, false))?;
         let mut lock = meta_page.write().unwrap();
         // Write num attrs
         {
@@ -223,7 +230,7 @@ impl Rel {
     }
 
     fn meta_buf_key(&self) -> BufKey {
-        BufKey::new(self.rel_id, 0)
+        BufKey::new(self.rel_id, 0, false)
     }
 
     fn to_filename(&self) -> String {

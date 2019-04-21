@@ -113,14 +113,8 @@ fn test_recovery() {
     db_state.buf_mgr.persist().unwrap();
     // Insert 2 tuples, there will be 2 uncheckpointed entries after this
     let tuples = rel.data_from_literal(vec![
-        vec![
-            Literal::String("a".to_string()),
-            Literal::Integer(1),
-        ],
-        vec![
-            Literal::String("b".to_string()),
-            Literal::Integer(2),
-        ]
+        vec![Literal::String("a".to_string()), Literal::Integer(1)],
+        vec![Literal::String("b".to_string()), Literal::Integer(2)],
     ]);
     rel.write_new_tuple(&tuples[0], &mut db_state).unwrap();
     rel.write_new_tuple(&tuples[1], &mut db_state).unwrap();
@@ -133,8 +127,11 @@ fn test_recovery() {
     rel.scan(
         &mut db_state,
         |_| true,
-        |data| { written_tuples.push(data.to_vec()); }
-    ).unwrap();
+        |data| {
+            written_tuples.push(data.to_vec());
+        },
+    )
+    .unwrap();
 
     teardown(db_state, data_dir);
 
