@@ -77,16 +77,29 @@ impl Rel {
             tuple_desc,
             num_data_pages: 1,
         };
-        let name: String = name.into();
 
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         // Add an entry to the table info rel
         let table_rel = Rel::load(meta::TABLE_REL_ID, db_state)?;
         let new_entry = table_rel
             .tuple_desc
-            .create_tuple_data(vec![name, rel.rel_id.to_string()]);
+            .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
         table_rel.write_new_tuple(&new_entry, db_state)?;
 
+        Ok(rel)
+    }
+
+    pub fn new_temp_rel(
+        tuple_desc: TupleDesc,
+        db_state: &mut DbState
+    ) -> Result<Rel, std::io::Error> {
+        let rel_id = db_state.buf_mgr.new_temp_id();
+        let rel = Rel {
+            rel_id,
+            tuple_desc,
+            num_data_pages: 1,
+        };
+        Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         Ok(rel)
     }
 

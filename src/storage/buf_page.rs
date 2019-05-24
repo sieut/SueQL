@@ -36,9 +36,10 @@ impl BufPage {
     }
 
     pub fn load_from(
-        buffer: &[u8; PAGE_SIZE as usize],
+        buffer: &[u8],
         buf_key: &BufKey,
     ) -> Result<BufPage, std::io::Error> {
+        assert_eq!(buffer.len(), PAGE_SIZE);
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
         let lsn = reader.read_u32::<LittleEndian>()?;
         let upper_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;

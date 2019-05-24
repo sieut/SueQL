@@ -19,6 +19,7 @@ impl BufKey {
 
     pub fn to_filename(&self, data_dir: String) -> String {
         if self.temp {
+            assert_eq!(self.file_id, 0);
             format!("{}/temp/{}.dat", data_dir, self.file_id)
         } else {
             format!("{}/{}.dat", data_dir, self.file_id)

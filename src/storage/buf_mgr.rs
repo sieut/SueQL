@@ -1,5 +1,6 @@
 use db_state::DbSettings;
 use evmap;
+use internal_types::ID;
 use log::LogMgr;
 use std::collections::VecDeque;
 use std::fs;
@@ -105,6 +106,7 @@ pub struct BufMgr {
     evict_queue: Arc<Mutex<VecDeque<BufKey>>>,
     max_size: Arc<usize>,
     data_dir: Arc<String>,
+    temp_counter: Arc<Mutex<ID>>,
 }
 
 impl BufMgr {
@@ -118,6 +120,7 @@ impl BufMgr {
             // Default size a bit less than 4GB
             max_size: Arc::new(settings.buf_mgr_size.unwrap_or(80000)),
             data_dir: Arc::new(settings.data_dir.unwrap_or("data".to_string())),
+            temp_counter: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -148,7 +151,8 @@ impl BufMgr {
                     break Ok(buf);
                 }
                 None => {
-                    self.read_buf(key)?;
+                    let buf = self.read_buf(key)?;
+                    self.add_buf(buf, key)?;
                 }
             };
         }
@@ -215,13 +219,22 @@ impl BufMgr {
         }
     }
 
-    fn read_buf(&mut self, key: &BufKey) -> Result<(), io::Error> {
+    pub fn new_temp_id(&mut self) -> ID {
+        let mut temp_cnt = self.temp_counter.lock().unwrap();
+        *temp_cnt += 1;
+        *temp_cnt
+    }
+
+    fn read_buf(&self, key: &BufKey) -> Result<Vec<u8>, io::Error> {
         let mut file = fs::File::open(key.to_filename(self.data_dir()))?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
         let mut buf = [0 as u8; storage::PAGE_SIZE];
         file.read_exact(&mut buf)?;
+        Ok(buf.to_vec())
+    }
 
+    fn add_buf(&mut self, buf: Vec<u8>, key: &BufKey) -> Result<(), io::Error> {
         let mut buf_w = self.buf_table_w.lock().unwrap();
         let mut evict_q = self.evict_queue.lock().unwrap();
 
