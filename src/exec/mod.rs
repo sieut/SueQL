@@ -47,7 +47,7 @@ fn select(
 ) -> Result<(), std::io::Error> {
     // Only Select from 1 table rn
     let table_id = utils::get_table_id(stmt.tables[0].name.clone(), db_state)?;
-    let rel = Rel::load(table_id, db_state)?;
+    let rel = Rel::load(table_id, false, db_state)?;
     let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
 
     rel.scan(
@@ -68,7 +68,7 @@ fn insert(
     db_state: &mut DbState,
 ) -> Result<(), std::io::Error> {
     let table_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
-    let rel = Rel::load(table_id, db_state)?;
+    let rel = Rel::load(table_id, false, db_state)?;
     let tuples = rel.data_from_literal(stmt.data.clone());
     for tup in tuples.iter() {
         rel.write_new_tuple(&*tup, db_state)?;

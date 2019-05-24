@@ -16,15 +16,17 @@ pub struct Rel {
     pub rel_id: ID,
     tuple_desc: TupleDesc,
     num_data_pages: usize,
+    temp: bool,
 }
 
 impl Rel {
     pub fn load(
         rel_id: ID,
+        temp: bool,
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
         let buf_page =
-            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, false))?;
+            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, temp))?;
         let lock = buf_page.read().unwrap();
 
         // The data should have at least num_attr, and an attr type
@@ -61,6 +63,7 @@ impl Rel {
             rel_id,
             tuple_desc: TupleDesc::from_data(&attr_data)?,
             num_data_pages,
+            temp,
         })
     }
 
@@ -76,11 +79,12 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
+            temp: false,
         };
 
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         // Add an entry to the table info rel
-        let table_rel = Rel::load(meta::TABLE_REL_ID, db_state)?;
+        let table_rel = Rel::load(meta::TABLE_REL_ID, false, db_state)?;
         let new_entry = table_rel
             .tuple_desc
             .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
@@ -98,6 +102,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
+            temp: true,
         };
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         Ok(rel)
@@ -113,6 +118,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
+            temp: false,
         };
         Rel::write_new_rel(buf_mgr, &rel)?;
         Ok(rel)
@@ -243,7 +249,7 @@ impl Rel {
     }
 
     fn meta_buf_key(&self) -> BufKey {
-        BufKey::new(self.rel_id, 0, false)
+        BufKey::new(self.rel_id, 0, self.temp)
     }
 
     fn to_filename(&self) -> String {

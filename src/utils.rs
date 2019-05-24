@@ -51,7 +51,7 @@ pub fn get_table_id(
     name: String,
     db_state: &mut DbState,
 ) -> Result<ID, std::io::Error> {
-    let rel = Rel::load(TABLE_REL_ID, db_state)?;
+    let rel = Rel::load(TABLE_REL_ID, false, db_state)?;
     let mut id = String::from("");
     rel.scan(
         db_state,
