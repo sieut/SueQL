@@ -3,7 +3,7 @@ use db_state::{DbSettings, DbState};
 use log::LogMgr;
 use meta::Meta;
 use rel::Rel;
-use storage::BufMgr;
+use storage::{BufMgr, BufType};
 use tuple::TupleDesc;
 use utils;
 
@@ -18,7 +18,7 @@ fn test_new_rel() {
     );
     let rel = Rel::new("test_new_rel", desc.clone(), &mut db_state).unwrap();
     let returned_id = rel.rel_id;
-    let rel = Rel::load(rel.rel_id, &mut db_state).unwrap();
+    let rel = Rel::load(rel.rel_id, BufType::Data, &mut db_state).unwrap();
 
     let id =
         utils::get_table_id("test_new_rel".to_string(), &mut db_state).unwrap();

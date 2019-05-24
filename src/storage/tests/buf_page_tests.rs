@@ -1,8 +1,6 @@
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::Cursor;
-use storage::buf_key::BufKey;
-use storage::buf_page::BufPage;
-use storage::PAGE_SIZE;
+use storage::{BufKey, BufPage, BufType, PAGE_SIZE};
 use tuple::tuple_ptr::TuplePtr;
 
 #[test]
@@ -44,14 +42,14 @@ fn test_get_tuple_data() {
     buf_page.write_tuple_data(&[2u8; 8], None, None).unwrap();
     buf_page.write_tuple_data(&[1u8; 16], None, None).unwrap();
 
-    let invalid_tuple_ptr = TuplePtr::new(BufKey::new(0, 1), 4);
+    let invalid_tuple_ptr = TuplePtr::new(BufKey::new(0, 1, BufType::Data), 4);
     assert!(buf_page.get_tuple_data(&invalid_tuple_ptr).is_err());
 
-    let tuple_ptr_1 = TuplePtr::new(BufKey::new(0, 0), 0);
+    let tuple_ptr_1 = TuplePtr::new(BufKey::new(0, 0, BufType::Data), 0);
     let tuple = buf_page.get_tuple_data(&tuple_ptr_1).unwrap();
     assert_eq!(tuple, &[2u8; 8]);
 
-    let tuple_ptr_2 = TuplePtr::new(BufKey::new(0, 0), 1);
+    let tuple_ptr_2 = TuplePtr::new(BufKey::new(0, 0, BufType::Data), 1);
     let tuple = buf_page.get_tuple_data(&tuple_ptr_2).unwrap();
     assert_eq!(tuple, &[1u8; 16]);
 }
@@ -70,5 +68,5 @@ fn test_buf_page_iter() {
 fn new_page() -> BufPage {
     let mut buffer = [0u8; PAGE_SIZE];
     buffer.copy_from_slice(&BufPage::default_buf());
-    BufPage::load_from(&buffer, &BufKey::new(0, 0)).unwrap()
+    BufPage::load_from(&buffer, &BufKey::new(0, 0, BufType::Data)).unwrap()
 }

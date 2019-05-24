@@ -3,7 +3,7 @@ use db_state::{DbSettings, DbState};
 use log::{LogEntry, LogMgr, OpType, LOG_REL_ID};
 use meta::Meta;
 use rel::Rel;
-use storage::{BufKey, BufMgr};
+use storage::{BufKey, BufMgr, BufType};
 use tuple::TupleDesc;
 
 #[test]
@@ -12,7 +12,7 @@ fn test_write_log_entries() {
     let mut db_state = setup(data_dir);
 
     let entry = LogEntry::new(
-        BufKey::new(3, 1),
+        BufKey::new(3, 1, BufType::Data),
         OpType::InsertTuple,
         vec![0u8; 4],
         &mut db_state,
@@ -26,7 +26,7 @@ fn test_write_log_entries() {
 
     let log_page = db_state
         .buf_mgr
-        .get_buf(&BufKey::new(LOG_REL_ID, 1))
+        .get_buf(&BufKey::new(LOG_REL_ID, 1, BufType::Data))
         .unwrap();
     let guard = log_page.read().unwrap();
     let written_entry =
@@ -47,7 +47,7 @@ fn test_log_checkpoints() {
     let mut db_state = setup(data_dir);
 
     let entry = LogEntry::new(
-        BufKey::new(3, 1),
+        BufKey::new(3, 1, BufType::Data),
         OpType::InsertTuple,
         vec![0u8; 4],
         &mut db_state,
@@ -86,13 +86,13 @@ fn test_log_checkpoints() {
 
     teardown(db_state, data_dir);
 
-    assert_eq!(cp_1.buf_key, BufKey::new(LOG_REL_ID, 1));
+    assert_eq!(cp_1.buf_key, BufKey::new(LOG_REL_ID, 1, BufType::Data));
     assert_eq!(cp_1.buf_offset, 0);
 
-    assert_eq!(cp_2.buf_key, BufKey::new(LOG_REL_ID, 0));
+    assert_eq!(cp_2.buf_key, BufKey::new(LOG_REL_ID, 0, BufType::Data));
     assert_eq!(cp_2.buf_offset, 0);
 
-    assert_eq!(cp_3.buf_key, BufKey::new(LOG_REL_ID, 1));
+    assert_eq!(cp_3.buf_key, BufKey::new(LOG_REL_ID, 1, BufType::Data));
     assert_eq!(cp_3.buf_offset, 2);
 }
 
@@ -122,7 +122,7 @@ fn test_recovery() {
     // Restart db, basically
     let mut db_state = setup(data_dir);
     // Load the Rel and check for the tuples
-    let rel = Rel::load(rel_id, &mut db_state).unwrap();
+    let rel = Rel::load(rel_id, BufType::Data, &mut db_state).unwrap();
     let mut written_tuples = vec![];
     rel.scan(
         &mut db_state,
@@ -162,7 +162,7 @@ fn test_recover_new_rel() {
     // Restart db, basically
     let mut db_state = setup(data_dir);
     // Load the Rel
-    let rel = Rel::load(rel_id, &mut db_state).unwrap();
+    let rel = Rel::load(rel_id, BufType::Data, &mut db_state).unwrap();
     teardown(db_state, data_dir);
 
     assert_eq!(rel.tuple_desc(), desc);
