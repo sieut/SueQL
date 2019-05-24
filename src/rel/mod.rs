@@ -5,7 +5,7 @@ use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
 use std::io::Cursor;
-use storage::{BufKey, BufMgr, PAGE_SIZE};
+use storage::{BufKey, BufMgr, BufType, PAGE_SIZE};
 use tuple::{TupleDesc, TuplePtr};
 use utils;
 
@@ -16,17 +16,17 @@ pub struct Rel {
     pub rel_id: ID,
     tuple_desc: TupleDesc,
     num_data_pages: usize,
-    temp: bool,
+    buf_type: BufType,
 }
 
 impl Rel {
     pub fn load(
         rel_id: ID,
-        temp: bool,
+        buf_type: BufType,
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
         let buf_page =
-            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, temp))?;
+            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, buf_type))?;
         let lock = buf_page.read().unwrap();
 
         // The data should have at least num_attr, and an attr type
@@ -63,7 +63,7 @@ impl Rel {
             rel_id,
             tuple_desc: TupleDesc::from_data(&attr_data)?,
             num_data_pages,
-            temp,
+            buf_type,
         })
     }
 
@@ -79,12 +79,12 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
-            temp: false,
+            buf_type: BufType::Data,
         };
 
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         // Add an entry to the table info rel
-        let table_rel = Rel::load(meta::TABLE_REL_ID, false, db_state)?;
+        let table_rel = Rel::load(meta::TABLE_REL_ID, BufType::Data, db_state)?;
         let new_entry = table_rel
             .tuple_desc
             .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
@@ -102,7 +102,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
-            temp: true,
+            buf_type: BufType::Temp,
         };
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         Ok(rel)
@@ -118,7 +118,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             num_data_pages: 1,
-            temp: false,
+            buf_type: BufType::Data,
         };
         Rel::write_new_rel(buf_mgr, &rel)?;
         Ok(rel)
@@ -134,11 +134,7 @@ impl Rel {
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let _rel_guard = rel_meta.write().unwrap();
 
-        let data_page = db_state.buf_mgr.get_buf(&BufKey::new(
-            self.rel_id,
-            self.num_data_pages as u64,
-            false,
-        ))?;
+        let data_page = db_state.buf_mgr.get_buf(&self.last_buf_key())?;
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
@@ -156,11 +152,8 @@ impl Rel {
         }
         // Not enough space in page, have to create a new one
         else {
-            let new_page = db_state.buf_mgr.new_buf(&BufKey::new(
-                self.rel_id,
-                (self.num_data_pages + 1) as u64,
-                false,
-            ))?;
+            let new_page =
+                db_state.buf_mgr.new_buf(&self.last_buf_key().inc_offset())?;
             let mut lock = new_page.write().unwrap();
 
             let log_entry = LogEntry::new(
@@ -194,7 +187,7 @@ impl Rel {
             let page = db_state.buf_mgr.get_buf(&BufKey::new(
                 self.rel_id,
                 page_idx as u64,
-                false,
+                self.buf_type,
             ))?;
             let guard = page.read().unwrap();
             for tup in guard.iter() {
@@ -228,9 +221,10 @@ impl Rel {
         rel: &Rel,
     ) -> Result<(), std::io::Error> {
         // Create new data file
-        let meta_page = buf_mgr.new_buf(&BufKey::new(rel.rel_id, 0, false))?;
-        let _first_page =
-            buf_mgr.new_buf(&BufKey::new(rel.rel_id, 1, false))?;
+        let key = rel.meta_buf_key();
+        let meta_page = buf_mgr.new_buf(&key)?;
+        let _first_page = buf_mgr.new_buf(&key.inc_offset())?;
+
         let mut lock = meta_page.write().unwrap();
         // Write num attrs
         {
@@ -249,7 +243,11 @@ impl Rel {
     }
 
     fn meta_buf_key(&self) -> BufKey {
-        BufKey::new(self.rel_id, 0, self.temp)
+        BufKey::new(self.rel_id, 0, self.buf_type)
+    }
+
+    fn last_buf_key(&self) -> BufKey {
+        BufKey::new(self.rel_id, self.num_data_pages as u64, self.buf_type)
     }
 
     fn to_filename(&self) -> String {

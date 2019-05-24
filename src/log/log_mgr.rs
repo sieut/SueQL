@@ -2,11 +2,11 @@ use internal_types::ID;
 use log::{LogEntry, OpType};
 use std::sync::{Arc, RwLock};
 use storage::buf_mgr::TableItem;
-use storage::{BufKey, BufMgr, Storable};
+use storage::{BufKey, BufMgr, BufType, Storable};
 use tuple::TuplePtr;
 
 pub static LOG_REL_ID: ID = 2;
-static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0, false);
+static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0, BufType::Data);
 static LAST_CP_PTR: TuplePtr = TuplePtr::new(LOG_META_KEY, 0);
 
 #[derive(Clone, Debug)]
@@ -45,9 +45,9 @@ impl LogMgr {
         }
 
         let _first_page =
-            buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1, false))?;
+            buf_mgr.new_buf(&BufKey::new(LOG_REL_ID, 1, BufType::Data))?;
         let cur_page_key =
-            Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1, false)));
+            Arc::new(RwLock::new(BufKey::new(LOG_REL_ID, 1, BufType::Data)));
 
         Ok(LogMgr {
             meta_page,
@@ -75,7 +75,7 @@ impl LogMgr {
         let cur_page_key = Arc::new(RwLock::new(BufKey::new(
             LOG_REL_ID,
             log_file_len / PAGE_SIZE as u64 - 1,
-            false,
+            BufType::Data,
         )));
 
         let mut log_mgr = LogMgr {

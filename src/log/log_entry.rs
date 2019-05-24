@@ -1,7 +1,7 @@
 use db_state::DbState;
 use internal_types::TupleData;
 use log::{LogHeader, OpType};
-use storage::{BufKey, Storable};
+use storage::{BufKey, BufType, Storable};
 
 #[derive(Clone, Debug)]
 pub struct LogEntry {
@@ -29,7 +29,7 @@ impl LogEntry {
     pub fn new_pending_cp() -> LogEntry {
         let header = LogHeader::new(
             0,
-            BufKey::new(0, 0, false),
+            BufKey::new(0, 0, BufType::Data),
             OpType::PendingCheckpoint,
         );
         LogEntry {
@@ -39,8 +39,8 @@ impl LogEntry {
     }
 
     pub fn new_cp() -> LogEntry {
-        let header =
-            LogHeader::new(0, BufKey::new(0, 0, false), OpType::Checkpoint);
+        let header = LogHeader::new(
+            0, BufKey::new(0, 0, BufType::Data), OpType::Checkpoint);
         LogEntry {
             header,
             data: vec![],
