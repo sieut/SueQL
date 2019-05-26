@@ -15,7 +15,6 @@ use utils;
 pub struct Rel {
     pub rel_id: ID,
     tuple_desc: TupleDesc,
-    num_data_pages: usize,
     buf_type: BufType,
 }
 
@@ -29,7 +28,7 @@ impl Rel {
             db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, buf_type))?;
         let lock = buf_page.read().unwrap();
 
-        // The data should have at least num_attr, and an attr type
+        // The data should have at least num_attr, and attrs
         assert!(lock.tuple_count() >= 2);
 
         let mut iter = lock.iter();
@@ -55,14 +54,9 @@ impl Rel {
             };
         }
 
-        let rel_filename = db_state.buf_mgr.key_to_filename(lock.buf_key);
-        let num_data_pages =
-            utils::file_len(&rel_filename)? as usize / PAGE_SIZE - 1;
-
         Ok(Rel {
             rel_id,
             tuple_desc: TupleDesc::from_data(&attr_data)?,
-            num_data_pages,
             buf_type,
         })
     }
@@ -78,7 +72,6 @@ impl Rel {
         let rel = Rel {
             rel_id,
             tuple_desc,
-            num_data_pages: 1,
             buf_type: BufType::Data,
         };
 
@@ -101,7 +94,6 @@ impl Rel {
         let rel = Rel {
             rel_id,
             tuple_desc,
-            num_data_pages: 1,
             buf_type: BufType::Temp,
         };
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
@@ -117,7 +109,6 @@ impl Rel {
         let rel = Rel {
             rel_id,
             tuple_desc,
-            num_data_pages: 1,
             buf_type: BufType::Data,
         };
         Rel::write_new_rel(buf_mgr, &rel)?;
@@ -134,7 +125,8 @@ impl Rel {
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let _rel_guard = rel_meta.write().unwrap();
 
-        let data_page = db_state.buf_mgr.get_buf(&self.last_buf_key())?;
+        let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
+        let data_page = db_state.buf_mgr.get_buf(&last_buf_key)?;
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
@@ -153,7 +145,7 @@ impl Rel {
         // Not enough space in page, have to create a new one
         else {
             let new_page =
-                db_state.buf_mgr.new_buf(&self.last_buf_key().inc_offset())?;
+                db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
             let mut lock = new_page.write().unwrap();
 
             let log_entry = LogEntry::new(
@@ -183,7 +175,7 @@ impl Rel {
         let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let _rel_guard = rel_meta.read().unwrap();
 
-        for page_idx in 1..self.num_data_pages + 1 {
+        for page_idx in 1..self.num_pages(&mut db_state.buf_mgr)? + 1 {
             let page = db_state.buf_mgr.get_buf(&BufKey::new(
                 self.rel_id,
                 page_idx as u64,
@@ -246,8 +238,18 @@ impl Rel {
         BufKey::new(self.rel_id, 0, self.buf_type)
     }
 
-    fn last_buf_key(&self) -> BufKey {
-        BufKey::new(self.rel_id, self.num_data_pages as u64, self.buf_type)
+    fn last_buf_key(&self, buf_mgr: &mut BufMgr) -> Result<BufKey, std::io::Error> {
+        Ok(BufKey::new(
+                self.rel_id,
+                self.num_pages(buf_mgr)? as u64,
+                self.buf_type
+                ))
+    }
+
+    //TODO Compare between saving num_pages in 1st page and getting file len
+    fn num_pages(&self, buf_mgr: &mut BufMgr) -> Result<u64, std::io::Error> {
+        let rel_filename = buf_mgr.key_to_filename(self.meta_buf_key());
+        Ok(utils::file_len(&rel_filename)? / PAGE_SIZE as u64 - 1)
     }
 
     fn to_filename(&self) -> String {
