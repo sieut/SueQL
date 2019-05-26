@@ -4,7 +4,6 @@ use db_state::State;
 use internal_types::{ID, LSN};
 use rel::Rel;
 use std::io::Cursor;
-use std::sync::{Arc, Mutex};
 use storage::{BufKey, BufMgr, BufType};
 use storage::buf_mgr::TableItem;
 use tuple::tuple_desc::TupleDesc;
@@ -23,8 +22,6 @@ static CUR_LSN_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 2);
 pub struct Meta {
     // Keep hold of page from BufMgr so it's never evicted
     buf: TableItem,
-    cur_id: Arc<Mutex<ID>>,
-    cur_lsn: Arc<Mutex<LSN>>,
 }
 
 impl Meta {
@@ -48,18 +45,12 @@ impl Meta {
 
         let id_data = lock.get_tuple_data(&CUR_ID_PTR)?;
         utils::assert_data_len(&id_data, 4)?;
-        let mut cursor = Cursor::new(&id_data);
-        let cur_id = Arc::new(Mutex::new(cursor.read_u32::<LittleEndian>()?));
 
         let lsn_data = lock.get_tuple_data(&CUR_LSN_PTR)?;
         utils::assert_data_len(&lsn_data, 4)?;
-        let mut cursor = Cursor::new(&lsn_data);
-        let cur_lsn = Arc::new(Mutex::new(cursor.read_u32::<LittleEndian>()?));
 
         Ok(Meta {
             buf: buf.clone(),
-            cur_id,
-            cur_lsn,
         })
     }
 
@@ -78,8 +69,6 @@ impl Meta {
 
         Ok(Meta {
             buf: buf.clone(),
-            cur_id: Arc::new(Mutex::new(2)),
-            cur_lsn: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -91,27 +80,24 @@ impl Meta {
     }
 
     pub fn get_new_id(&self) -> Result<ID, std::io::Error> {
-        let mut cur_id = self.cur_id.lock().unwrap();
-        *cur_id += 1;
-        self.inc_counter(*cur_id, &CUR_ID_PTR)
+        self.inc_counter(&CUR_ID_PTR)
     }
 
     pub fn get_new_lsn(&self) -> Result<LSN, std::io::Error> {
-        let mut cur_lsn = self.cur_lsn.lock().unwrap();
-        *cur_lsn += 1;
-        self.inc_counter(*cur_lsn, &CUR_LSN_PTR)
+        self.inc_counter(&CUR_LSN_PTR)
     }
 
-    fn inc_counter(
-        &self,
-        val: u32,
-        ptr: &TuplePtr,
-    ) -> Result<u32, std::io::Error> {
+    fn inc_counter(&self, ptr: &TuplePtr,) -> Result<u32, std::io::Error> {
         let mut lock = self.buf.write().unwrap();
+
+        let cur_val =
+            Cursor::new(&lock.get_tuple_data(ptr)?).read_u32::<LittleEndian>()?;
+
         let mut data = vec![0u8; 4];
-        LittleEndian::write_u32(&mut data, val);
+        LittleEndian::write_u32(&mut data, cur_val + 1);
         lock.write_tuple_data(&data[0..4], Some(&ptr), None)?;
-        Ok(val)
+
+        Ok(cur_val + 1)
     }
 
     const fn default_id_counter() -> [u8; 4] {
