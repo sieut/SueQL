@@ -4,6 +4,7 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
 
 ## TODO
  - [X] BufMgr, a pager to cache pages from disk
+    - [ ] Bulk load to support scanning Rel
  - [X] Exec for basic queries (create, insert, select)
  - [X] WAL
     - [X] LogMgr
@@ -13,10 +14,10 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
         - [X] Recovery
     - [X] WAL on writes
     - [X] Tests
+ - [ ] Exec plan
  - [ ] Index
     - [ ] BTree
     - [ ] Hash
- - [ ] Advanced exec nodes
  - [ ] Optimizer
  - [ ] Misc
     - [X] Name data files based on DbSettings
