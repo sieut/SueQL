@@ -103,6 +103,8 @@ fn test_bufmgr_ref() {
 
     let mut buf_mgr = setup_bufmgr(data_dir, None);
     let mut clone = buf_mgr.clone();
+    // Have 2 clones to make sure refs don't go up with BufMgr clones
+    let _clone2 = buf_mgr.clone();
 
     let buf = buf_mgr.get_buf(&BufKey::new(0, 0, BufType::Data)).unwrap();
     let _buf_clone = clone.get_buf(&BufKey::new(0, 0, BufType::Data)).unwrap();
