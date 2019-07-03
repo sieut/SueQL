@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use db_state::DbState;
-use internal_types::ID;
+use internal_types::{ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
@@ -130,17 +130,12 @@ impl Rel {
         let mut lock = data_page.write().unwrap();
 
         if lock.available_data_space() >= data.len() {
-            let log_entry = LogEntry::new(
-                lock.buf_key,
-                OpType::InsertTuple,
-                data.to_vec(),
-                db_state,
-            )?;
-            let lsn = log_entry.header.lsn;
-            db_state
-                .log_mgr
-                .write_entries(vec![log_entry], &mut db_state.buf_mgr)?;
-            lock.write_tuple_data(data, None, Some(lsn))
+            let lsn = match self.buf_type {
+                BufType::Data => Some(self.write_insert_log(
+                        lock.buf_key, data.to_vec(), db_state)?),
+                _ => None
+            };
+            lock.write_tuple_data(data, None, lsn)
         }
         // Not enough space in page, have to create a new one
         else {
@@ -148,18 +143,28 @@ impl Rel {
                 db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
             let mut lock = new_page.write().unwrap();
 
-            let log_entry = LogEntry::new(
-                lock.buf_key,
-                OpType::InsertTuple,
-                data.to_vec(),
-                db_state,
-            )?;
-            let lsn = log_entry.header.lsn;
-            db_state
-                .log_mgr
-                .write_entries(vec![log_entry], &mut db_state.buf_mgr)?;
-            lock.write_tuple_data(data, None, Some(lsn))
+            let lsn = match self.buf_type {
+                BufType::Data => Some(self.write_insert_log(
+                        lock.buf_key, data.to_vec(), db_state)?),
+                _ => None
+            };
+            lock.write_tuple_data(data, None, lsn)
         }
+    }
+
+    fn write_insert_log(
+        &self,
+        buf_key: BufKey,
+        data: Vec<u8>,
+        db_state: &mut DbState
+    ) -> Result<LSN, std::io::Error> {
+        let entry = LogEntry::new(
+            buf_key, OpType::InsertTuple, data, db_state)?;
+        let lsn = entry.header.lsn;
+        db_state
+            .log_mgr
+            .write_entries(vec![entry], &mut db_state.buf_mgr)?;
+        Ok(lsn)
     }
 
     pub fn scan<Filter, Then>(
