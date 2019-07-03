@@ -141,21 +141,15 @@ impl BufMgr {
     }
 
     pub fn get_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
-        // TODO not the best way to get_buf, but the old way was not correct
-        loop {
-            match self.get_item(key) {
-                Some(buf) => {
-                    let info = self.get_info_arc(key).unwrap();
-                    let mut write = info.write().unwrap();
-                    write.ref_bit = true;
-                    break Ok(buf);
-                }
-                None => {
-                    let buf = self.read_buf(key)?;
-                    self.add_buf(buf, key)?;
-                }
-            };
-        }
+        let buf = match self.get_item(key) {
+            Some(buf) => buf,
+            None => self.add_buf(self.read_buf(key)?, key)?
+        };
+
+        let info = self.get_info_arc(key).unwrap();
+        let mut write = info.write().unwrap();
+        write.ref_bit = true;
+        Ok(buf)
     }
 
     pub fn store_buf(
@@ -234,14 +228,15 @@ impl BufMgr {
         Ok(buf.to_vec())
     }
 
-    fn add_buf(&mut self, buf: Vec<u8>, key: &BufKey) -> Result<(), io::Error> {
+    fn add_buf(&mut self, buf: Vec<u8>, key: &BufKey) -> Result<TableItem, io::Error> {
         let mut buf_w = self.buf_table_w.lock().unwrap();
         let mut evict_q = self.evict_queue.lock().unwrap();
 
         // Could have been loaded after acquiring the locks
-        if self.has_buf(key) {
-            return Ok(());
-        }
+        match self.get_item(key) {
+            Some(buf) => { return Ok(buf); },
+            None => {}
+        };
 
         // Evict
         if self.buf_table_r.len() >= *(self.max_size) {
@@ -278,7 +273,7 @@ impl BufMgr {
         );
         evict_q.push_back(key.clone());
 
-        Ok(())
+        Ok(self.get_item(key).unwrap())
     }
 
     pub fn key_to_filename(&self, key: BufKey) -> String {
