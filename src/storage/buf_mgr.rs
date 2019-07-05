@@ -107,6 +107,7 @@ pub struct BufMgr {
     max_size: Arc<usize>,
     data_dir: Arc<String>,
     temp_counter: Arc<Mutex<ID>>,
+    mem_counter: Arc<Mutex<ID>>,
 }
 
 impl BufMgr {
@@ -121,6 +122,7 @@ impl BufMgr {
             max_size: Arc::new(settings.buf_mgr_size.unwrap_or(80000)),
             data_dir: Arc::new(settings.data_dir.unwrap_or("data".to_string())),
             temp_counter: Arc::new(Mutex::new(0)),
+            mem_counter: Arc::new(Mutex::new(0)),
         }
     }
 
@@ -141,15 +143,29 @@ impl BufMgr {
     }
 
     pub fn get_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
-        let buf = match self.get_item(key) {
-            Some(buf) => buf,
-            None => self.add_buf(self.read_buf(key)?, key)?
-        };
+        use std::io::{Error, ErrorKind};
+        use storage::BufType;
 
-        let info = self.get_info_arc(key).unwrap();
-        let mut write = info.write().unwrap();
-        write.ref_bit = true;
-        Ok(buf)
+        match &key.buf_type {
+            // TODO might want to make Mem buffers retrievable
+            // They are not right now because if the buffer is evicted,
+            // we will have to return an error, there is also no need to
+            // share these between threads
+            &BufType::Mem => Err(Error::new(
+                    ErrorKind::Other,
+                    "In-memory buffers are not retrievable")),
+            _ => {
+                let buf = match self.get_item(key) {
+                    Some(buf) => buf,
+                    None => self.add_buf(self.read_buf(key)?, key)?
+                };
+
+                let info = self.get_info_arc(key).unwrap();
+                let mut write = info.write().unwrap();
+                write.ref_bit = true;
+                Ok(buf)
+            }
+        }
     }
 
     pub fn store_buf(
@@ -157,6 +173,8 @@ impl BufMgr {
         key: &BufKey,
         info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>,
     ) -> Result<(), io::Error> {
+        use storage::BufType;
+
         match self.get_item(key) {
             Some(item) => {
                 let page_lock = item.read().unwrap();
@@ -168,6 +186,12 @@ impl BufMgr {
                 if !info_lock.dirty {
                     return Ok(());
                 }
+
+                // Do not write Mem bufs
+                match &page_lock.buf_key.buf_type {
+                    &BufType::Mem => { return Ok(()); }
+                    _ => {}
+                };
 
                 let mut file = fs::OpenOptions::new()
                     .write(true)
@@ -186,37 +210,55 @@ impl BufMgr {
 
     pub fn new_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
         use std::io::{Error, ErrorKind};
-        // Create new file
-        if key.byte_offset() == 0 {
-            // Check if the file already exists
-            if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
-                Err(Error::new(ErrorKind::AlreadyExists, "File already exists"))
-            } else {
-                utils::create_file(&key.to_filename(self.data_dir()))?;
-                self.get_buf(key)
-            }
-        }
-        // Add new page to file
-        else {
-            // If the offset is at the end of file, create new buf
-            if utils::file_len(&key.to_filename(self.data_dir()))?
-                == key.byte_offset()
-            {
-                let mut file = fs::OpenOptions::new()
-                    .write(true)
-                    .open(key.to_filename(self.data_dir()))?;
-                file.seek(io::SeekFrom::Start(key.byte_offset()))?;
-                file.write_all(&BufPage::default_buf())?;
-            }
+        use storage::BufType;
 
-            self.get_buf(key)
+        match &key.buf_type {
+            // Add a non-persistent buf to BufMgr if type is Mem
+            &BufType::Mem => {
+                self.add_buf(BufPage::default_buf(), key)
+            }
+            // Otherwise, create buf on disk
+            _ => {
+                // Create new file
+                if key.byte_offset() == 0 {
+                    // Check if the file already exists
+                    if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
+                        Err(Error::new(ErrorKind::AlreadyExists, "File already exists"))
+                    } else {
+                        utils::create_file(&key.to_filename(self.data_dir()))?;
+                        self.get_buf(key)
+                    }
+                }
+                // Add new page to file
+                else {
+                    // If the offset is at the end of file, create new buf
+                    if utils::file_len(&key.to_filename(self.data_dir()))?
+                        == key.byte_offset()
+                    {
+                        let mut file = fs::OpenOptions::new()
+                            .write(true)
+                            .open(key.to_filename(self.data_dir()))?;
+                        file.seek(io::SeekFrom::Start(key.byte_offset()))?;
+                        file.write_all(&BufPage::default_buf())?;
+                    }
+
+                    self.get_buf(key)
+                }
+            }
         }
     }
 
+    // TODO refactor, combine with new_mem_id
     pub fn new_temp_id(&mut self) -> ID {
         let mut temp_cnt = self.temp_counter.lock().unwrap();
         *temp_cnt += 1;
         *temp_cnt
+    }
+
+    pub fn new_mem_id(&mut self) -> ID {
+        let mut mem_cnt = self.mem_counter.lock().unwrap();
+        *mem_cnt += 1;
+        *mem_cnt
     }
 
     fn read_buf(&self, key: &BufKey) -> Result<Vec<u8>, io::Error> {

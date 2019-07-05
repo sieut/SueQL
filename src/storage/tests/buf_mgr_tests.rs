@@ -46,10 +46,14 @@ fn test_bufmgr_new_buf() {
     let data_dir = "test_bufmgr_new_buf";
 
     let mut buf_mgr = setup_bufmgr(data_dir, None);
+    // Next eligible buf_key in file 0 is (0, 1)
     assert!(buf_mgr.new_buf(&BufKey::new(0, 2, BufType::Data)).is_err());
+    // Buf already exists (db's meta file)
     assert!(buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Data)).is_err());
 
     let _buf_page = buf_mgr.new_buf(&BufKey::new(0, 1, BufType::Data)).unwrap();
+    let _temp_page = buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Temp)).unwrap();
+    let _mem_page = buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Mem)).unwrap();
     teardown_bufmgr(data_dir);
 }
 
@@ -116,10 +120,18 @@ fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
     use std::fs::{create_dir, File};
     use std::io::ErrorKind;
 
+    let temp_dir: String = format!("{}/temp", data_dir);
     match create_dir(data_dir) {
         Ok(_) => {}
         Err(e) => match e.kind() {
             ErrorKind::AlreadyExists => {}
+            _ => panic!("Error when setting up test: {:?}", e),
+        },
+    };
+    match create_dir(temp_dir) {
+        Ok(_) => {},
+        Err(e) => match e.kind() {
+            ErrorKind::AlreadyExists => {},
             _ => panic!("Error when setting up test: {:?}", e),
         },
     };

@@ -25,6 +25,7 @@ impl BufKey {
         match &self.buf_type {
             &BufType::Data => format!("{}/{}.dat", data_dir, self.file_id),
             &BufType::Temp => format!("{}/temp/{}.dat", data_dir, self.file_id),
+            &BufType::Mem => format!("{}/mem.dat", data_dir),
         }
     }
 

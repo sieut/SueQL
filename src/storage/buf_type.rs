@@ -2,4 +2,5 @@
 pub enum BufType {
     Data,
     Temp,
+    Mem,
 }
