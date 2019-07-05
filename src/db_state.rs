@@ -50,13 +50,23 @@ impl DbState {
         use std::io::ErrorKind;
 
         let data_dir = data_dir.into();
+        let temp_dir = format!("{}/temp", data_dir);
         match create_dir(data_dir) {
-            Ok(_) => Ok(()),
+            Ok(_) => {},
             Err(e) => match e.kind() {
-                ErrorKind::AlreadyExists => Ok(()),
-                _ => Err(e),
+                ErrorKind::AlreadyExists => {},
+                _ => { return Err(e); },
             },
-        }
+        };
+        match create_dir(temp_dir) {
+            Ok(_) => {},
+            Err(e) => match e.kind() {
+                ErrorKind::AlreadyExists => {},
+                _ => { return Err(e); },
+            },
+        };
+
+        Ok(())
     }
 }
 
