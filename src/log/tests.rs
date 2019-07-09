@@ -127,7 +127,7 @@ fn test_recovery() {
     rel.scan(
         &mut db_state,
         |_| true,
-        |data| {
+        |data, _db_state| {
             written_tuples.push(data.to_vec());
         },
     )

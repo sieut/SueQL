@@ -152,12 +152,13 @@ impl BufMgr {
             // we will have to return an error, there is also no need to
             // share these between threads
             &BufType::Mem => Err(Error::new(
-                    ErrorKind::Other,
-                    "In-memory buffers are not retrievable")),
+                ErrorKind::Other,
+                "In-memory buffers are not retrievable",
+            )),
             _ => {
                 let buf = match self.get_item(key) {
                     Some(buf) => buf,
-                    None => self.add_buf(self.read_buf(key)?, key)?
+                    None => self.add_buf(self.read_buf(key)?, key)?,
                 };
 
                 let info = self.get_info_arc(key).unwrap();
@@ -189,7 +190,9 @@ impl BufMgr {
 
                 // Do not write Mem bufs
                 match &page_lock.buf_key.buf_type {
-                    &BufType::Mem => { return Ok(()); }
+                    &BufType::Mem => {
+                        return Ok(());
+                    }
                     _ => {}
                 };
 
@@ -214,16 +217,17 @@ impl BufMgr {
 
         match &key.buf_type {
             // Add a non-persistent buf to BufMgr if type is Mem
-            &BufType::Mem => {
-                self.add_buf(BufPage::default_buf(), key)
-            }
+            &BufType::Mem => self.add_buf(BufPage::default_buf(), key),
             // Otherwise, create buf on disk
             _ => {
                 // Create new file
                 if key.byte_offset() == 0 {
                     // Check if the file already exists
                     if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
-                        Err(Error::new(ErrorKind::AlreadyExists, "File already exists"))
+                        Err(Error::new(
+                            ErrorKind::AlreadyExists,
+                            "File already exists",
+                        ))
                     } else {
                         utils::create_file(&key.to_filename(self.data_dir()))?;
                         self.get_buf(key)
@@ -276,13 +280,19 @@ impl BufMgr {
         Ok(buf.to_vec())
     }
 
-    fn add_buf(&mut self, buf: Vec<u8>, key: &BufKey) -> Result<TableItem, io::Error> {
+    fn add_buf(
+        &mut self,
+        buf: Vec<u8>,
+        key: &BufKey,
+    ) -> Result<TableItem, io::Error> {
         let mut buf_w = self.buf_table_w.lock().unwrap();
         let mut evict_q = self.evict_queue.lock().unwrap();
 
         // Could have been loaded after acquiring the locks
         match self.get_item(key) {
-            Some(buf) => { return Ok(buf); },
+            Some(buf) => {
+                return Ok(buf);
+            }
             None => {}
         };
 

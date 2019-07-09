@@ -24,8 +24,11 @@ impl ExecNode for Projection {
                     |_| true,
                     |data, db_state| {
                         let cols = input.tuple_desc().cols(data);
-                        let cols: Vec<Vec<u8>> = self.indices
-                            .iter().map(|i| cols[*i].clone()).collect();
+                        let cols: Vec<Vec<u8>> = self
+                            .indices
+                            .iter()
+                            .map(|i| cols[*i].clone())
+                            .collect();
                         let projected = cols.concat();
 
                         // TODO handle the unwraps
@@ -33,17 +36,20 @@ impl ExecNode for Projection {
                             output.append_page(&buf_guard, db_state).unwrap();
                             buf_guard.clear();
                         }
-                        buf_guard.write_tuple_data(&projected, None, None).unwrap();
-                    })?;
+                        buf_guard
+                            .write_tuple_data(&projected, None, None)
+                            .unwrap();
+                    },
+                )?;
 
                 Ok(())
-            },
-            _ => Ok(())
+            }
+            _ => Ok(()),
         }
     }
 
     fn inputs(&self) -> Vec<Arc<ExecNode>> {
-        vec!(self.src.clone())
+        vec![self.src.clone()]
     }
 
     fn output(&self) -> DataStore {

@@ -52,17 +52,21 @@ impl DbState {
         let data_dir = data_dir.into();
         let temp_dir = format!("{}/temp", data_dir);
         match create_dir(data_dir) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => match e.kind() {
-                ErrorKind::AlreadyExists => {},
-                _ => { return Err(e); },
+                ErrorKind::AlreadyExists => {}
+                _ => {
+                    return Err(e);
+                }
             },
         };
         match create_dir(temp_dir) {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => match e.kind() {
-                ErrorKind::AlreadyExists => {},
-                _ => { return Err(e); },
+                ErrorKind::AlreadyExists => {}
+                _ => {
+                    return Err(e);
+                }
             },
         };
 

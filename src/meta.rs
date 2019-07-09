@@ -4,8 +4,8 @@ use db_state::State;
 use internal_types::{ID, LSN};
 use rel::Rel;
 use std::io::Cursor;
-use storage::{BufKey, BufMgr, BufType};
 use storage::buf_mgr::TableItem;
+use storage::{BufKey, BufMgr, BufType};
 use tuple::tuple_desc::TupleDesc;
 use tuple::tuple_ptr::TuplePtr;
 use utils;
@@ -49,9 +49,7 @@ impl Meta {
         let lsn_data = lock.get_tuple_data(&CUR_LSN_PTR)?;
         utils::assert_data_len(&lsn_data, 4)?;
 
-        Ok(Meta {
-            buf: buf.clone(),
-        })
+        Ok(Meta { buf: buf.clone() })
     }
 
     pub fn new(buf_mgr: &mut BufMgr) -> Result<Meta, std::io::Error> {
@@ -67,9 +65,7 @@ impl Meta {
 
         Rel::new_meta_rel(TABLE_REL_ID, table_rel_desc(), buf_mgr)?;
 
-        Ok(Meta {
-            buf: buf.clone(),
-        })
+        Ok(Meta { buf: buf.clone() })
     }
 
     pub fn set_state(&self, state: State) -> Result<(), std::io::Error> {
@@ -87,11 +83,11 @@ impl Meta {
         self.inc_counter(&CUR_LSN_PTR)
     }
 
-    fn inc_counter(&self, ptr: &TuplePtr,) -> Result<u32, std::io::Error> {
+    fn inc_counter(&self, ptr: &TuplePtr) -> Result<u32, std::io::Error> {
         let mut lock = self.buf.write().unwrap();
 
-        let cur_val =
-            Cursor::new(&lock.get_tuple_data(ptr)?).read_u32::<LittleEndian>()?;
+        let cur_val = Cursor::new(&lock.get_tuple_data(ptr)?)
+            .read_u32::<LittleEndian>()?;
 
         let mut data = vec![0u8; 4];
         LittleEndian::write_u32(&mut data, cur_val + 1);

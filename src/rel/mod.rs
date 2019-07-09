@@ -14,7 +14,7 @@ macro_rules! rel_read_lock {
     ($rel:ident, $buf_mgr:expr) => {
         let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
         let _guard = _meta.read().unwrap();
-    }
+    };
 }
 
 #[macro_use]
@@ -22,7 +22,7 @@ macro_rules! rel_write_lock {
     ($rel:ident, $buf_mgr:expr) => {
         let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
         let _guard = _meta.write().unwrap();
-    }
+    };
 }
 
 /// Represent a Relation on disk:
@@ -40,8 +40,9 @@ impl Rel {
         buf_type: BufType,
         db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
-        let buf_page =
-            db_state.buf_mgr.get_buf(&BufKey::new(rel_id, 0, buf_type))?;
+        let buf_page = db_state
+            .buf_mgr
+            .get_buf(&BufKey::new(rel_id, 0, buf_type))?;
         let lock = buf_page.read().unwrap();
 
         // The data should have at least num_attr, and attrs
@@ -104,7 +105,7 @@ impl Rel {
 
     pub fn new_temp_rel(
         tuple_desc: TupleDesc,
-        db_state: &mut DbState
+        db_state: &mut DbState,
     ) -> Result<Rel, std::io::Error> {
         let rel_id = db_state.buf_mgr.new_temp_id();
         let rel = Rel {
@@ -146,8 +147,11 @@ impl Rel {
         if lock.available_data_space() >= data.len() {
             let lsn = match self.buf_type {
                 BufType::Data => Some(self.write_insert_log(
-                        lock.buf_key, data.to_vec(), db_state)?),
-                _ => None
+                    lock.buf_key,
+                    data.to_vec(),
+                    db_state,
+                )?),
+                _ => None,
             };
             lock.write_tuple_data(data, None, lsn)
         }
@@ -159,8 +163,11 @@ impl Rel {
 
             let lsn = match self.buf_type {
                 BufType::Data => Some(self.write_insert_log(
-                        lock.buf_key, data.to_vec(), db_state)?),
-                _ => None
+                    lock.buf_key,
+                    data.to_vec(),
+                    db_state,
+                )?),
+                _ => None,
             };
             lock.write_tuple_data(data, None, lsn)
         }
@@ -172,11 +179,10 @@ impl Rel {
     pub fn append_page(
         &self,
         page: &BufPage,
-        db_state: &mut DbState
+        db_state: &mut DbState,
     ) -> Result<(), std::io::Error> {
         let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
-        let new_page =
-            db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
+        let new_page = db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
         let mut page_guard = new_page.write().unwrap();
         page_guard.clone_from(page);
         Ok(())
@@ -186,10 +192,10 @@ impl Rel {
         &self,
         buf_key: BufKey,
         data: Vec<u8>,
-        db_state: &mut DbState
+        db_state: &mut DbState,
     ) -> Result<LSN, std::io::Error> {
-        let entry = LogEntry::new(
-            buf_key, OpType::InsertTuple, data, db_state)?;
+        let entry =
+            LogEntry::new(buf_key, OpType::InsertTuple, data, db_state)?;
         let lsn = entry.header.lsn;
         db_state
             .log_mgr
@@ -273,12 +279,15 @@ impl Rel {
         BufKey::new(self.rel_id, 0, self.buf_type)
     }
 
-    fn last_buf_key(&self, buf_mgr: &mut BufMgr) -> Result<BufKey, std::io::Error> {
+    fn last_buf_key(
+        &self,
+        buf_mgr: &mut BufMgr,
+    ) -> Result<BufKey, std::io::Error> {
         Ok(BufKey::new(
-                self.rel_id,
-                self.num_pages(buf_mgr)? as u64,
-                self.buf_type
-                ))
+            self.rel_id,
+            self.num_pages(buf_mgr)? as u64,
+            self.buf_type,
+        ))
     }
 
     //TODO Compare between saving num_pages in 1st page and getting file len

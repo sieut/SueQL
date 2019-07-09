@@ -1,7 +1,7 @@
 use db_state::DbSettings;
 use std::io::Write;
-use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
 use storage::buf_page::HEADER_SIZE;
+use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
 
 #[test]
 fn test_bufmgr_get() {
@@ -19,14 +19,17 @@ fn test_bufmgr_store() {
     let data_dir = "test_bufmgr_store";
     let mut buf_mgr = setup_bufmgr(data_dir, None);
     {
-        let buf_page = buf_mgr.get_buf(&BufKey::new(0, 0, BufType::Data)).unwrap();
+        let buf_page =
+            buf_mgr.get_buf(&BufKey::new(0, 0, BufType::Data)).unwrap();
         // Change values in buf_page
         let mut lock = buf_page.write().unwrap();
         lock.write_tuple_data(&vec![1, 1, 1, 1], None, None)
             .unwrap();
     }
     // Write buf page
-    buf_mgr.store_buf(&BufKey::new(0, 0, BufType::Data), None).unwrap();
+    buf_mgr
+        .store_buf(&BufKey::new(0, 0, BufType::Data), None)
+        .unwrap();
 
     let mut buf_mgr = BufMgr::new(DbSettings {
         buf_mgr_size: None,
@@ -52,7 +55,8 @@ fn test_bufmgr_new_buf() {
     assert!(buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Data)).is_err());
 
     let _buf_page = buf_mgr.new_buf(&BufKey::new(0, 1, BufType::Data)).unwrap();
-    let _temp_page = buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Temp)).unwrap();
+    let _temp_page =
+        buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Temp)).unwrap();
     let _mem_page = buf_mgr.new_buf(&BufKey::new(0, 0, BufType::Mem)).unwrap();
     teardown_bufmgr(data_dir);
 }
@@ -129,9 +133,9 @@ fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
         },
     };
     match create_dir(temp_dir) {
-        Ok(_) => {},
+        Ok(_) => {}
         Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => {},
+            ErrorKind::AlreadyExists => {}
             _ => panic!("Error when setting up test: {:?}", e),
         },
     };

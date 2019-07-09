@@ -40,7 +40,10 @@ impl LogEntry {
 
     pub fn new_cp() -> LogEntry {
         let header = LogHeader::new(
-            0, BufKey::new(0, 0, BufType::Data), OpType::Checkpoint);
+            0,
+            BufKey::new(0, 0, BufType::Data),
+            OpType::Checkpoint,
+        );
         LogEntry {
             header,
             data: vec![],

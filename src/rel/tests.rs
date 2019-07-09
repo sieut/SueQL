@@ -73,8 +73,10 @@ fn test_rel_lock_macro() -> Result<(), std::io::Error> {
         vec![DataType::Char, DataType::U32],
         vec!["char", "u32"],
     );
-    let rel1 = Rel::new("test_rel_lock_macro_1", desc.clone(), &mut db_state).unwrap();
-    let rel2 = Rel::new("test_rel_lock_macro_2", desc.clone(), &mut db_state).unwrap();
+    let rel1 =
+        Rel::new("test_rel_lock_macro_1", desc.clone(), &mut db_state).unwrap();
+    let rel2 =
+        Rel::new("test_rel_lock_macro_2", desc.clone(), &mut db_state).unwrap();
 
     {
         rel_read_lock!(rel1, db_state.buf_mgr);
