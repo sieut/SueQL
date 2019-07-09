@@ -1,3 +1,10 @@
+pub mod data_store;
+pub mod exec_node;
+pub mod projection;
+
+pub use self::data_store::DataStore;
+pub use self::exec_node::ExecNode;
+
 use db_state::DbState;
 use nom_sql;
 use nom_sql::SqlQuery;
@@ -54,7 +61,7 @@ fn select(
     rel.scan(
         db_state,
         |_| true,
-        |data| {
+        |data, _db_state| {
             println!(
                 "{:?}",
                 rel.data_to_strings(data, Some(fields.clone())).unwrap()

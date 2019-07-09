@@ -62,6 +62,31 @@ fn test_write_tuple() {
     assert!(lsn != 0);
 }
 
+#[test]
+fn test_rel_lock_macro() -> Result<(), std::io::Error> {
+    use std::thread;
+
+    let data_dir = "test_rel_lock_macro";
+    let mut db_state = setup(data_dir);
+
+    let desc = TupleDesc::new(
+        vec![DataType::Char, DataType::U32],
+        vec!["char", "u32"],
+    );
+    let rel1 = Rel::new("test_rel_lock_macro_1", desc.clone(), &mut db_state).unwrap();
+    let rel2 = Rel::new("test_rel_lock_macro_2", desc.clone(), &mut db_state).unwrap();
+
+    {
+        rel_read_lock!(rel1, db_state.buf_mgr);
+        rel_write_lock!(rel2, db_state.buf_mgr);
+        let rel1_meta = db_state.buf_mgr.get_buf(&rel1.meta_buf_key())?;
+        assert!(rel1_meta.try_write().is_err());
+    }
+
+    teardown(db_state, data_dir);
+    Ok(())
+}
+
 fn setup(data_dir: &str) -> DbState {
     // Similar to start_db but persist loop is not started
     use std::fs::create_dir;

@@ -5,13 +5,29 @@ use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
 use std::io::Cursor;
-use storage::{BufKey, BufMgr, BufType, PAGE_SIZE};
+use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
 use tuple::{TupleDesc, TuplePtr};
 use utils;
 
+#[macro_use]
+macro_rules! rel_read_lock {
+    ($rel:ident, $buf_mgr:expr) => {
+        let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
+        let _guard = _meta.read().unwrap();
+    }
+}
+
+#[macro_use]
+macro_rules! rel_write_lock {
+    ($rel:ident, $buf_mgr:expr) => {
+        let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
+        let _guard = _meta.write().unwrap();
+    }
+}
+
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Rel {
     pub rel_id: ID,
     tuple_desc: TupleDesc,
@@ -121,9 +137,7 @@ impl Rel {
         db_state: &mut DbState,
     ) -> Result<TuplePtr, std::io::Error> {
         self.tuple_desc.assert_data_len(data)?;
-
-        let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
-        let _rel_guard = rel_meta.write().unwrap();
+        rel_write_lock!(self, db_state.buf_mgr);
 
         let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
         let data_page = db_state.buf_mgr.get_buf(&last_buf_key)?;
@@ -152,6 +166,22 @@ impl Rel {
         }
     }
 
+    /// Write a new page at the end of Rel's file.
+    /// Must hold Rel's write lock before calling.
+    // TODO make this an Op for logging
+    pub fn append_page(
+        &self,
+        page: &BufPage,
+        db_state: &mut DbState
+    ) -> Result<(), std::io::Error> {
+        let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
+        let new_page =
+            db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
+        let mut page_guard = new_page.write().unwrap();
+        page_guard.clone_from(page);
+        Ok(())
+    }
+
     fn write_insert_log(
         &self,
         buf_key: BufKey,
@@ -175,10 +205,10 @@ impl Rel {
     ) -> Result<(), std::io::Error>
     where
         Filter: Fn(&[u8]) -> bool,
-        Then: FnMut(&[u8]),
+        Then: FnMut(&[u8], &mut DbState),
     {
-        let rel_meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
-        let _rel_guard = rel_meta.read().unwrap();
+        // TODO update scan after BufMgr bulk load is added
+        rel_read_lock!(self, db_state.buf_mgr);
 
         for page_idx in 1..self.num_pages(&mut db_state.buf_mgr)? + 1 {
             let page = db_state.buf_mgr.get_buf(&BufKey::new(
@@ -189,7 +219,7 @@ impl Rel {
             let guard = page.read().unwrap();
             for tup in guard.iter() {
                 if filter(&*tup) {
-                    then(&*tup);
+                    then(&*tup, db_state);
                 }
             }
         }
@@ -239,7 +269,7 @@ impl Rel {
         Ok(())
     }
 
-    fn meta_buf_key(&self) -> BufKey {
+    pub fn meta_buf_key(&self) -> BufKey {
         BufKey::new(self.rel_id, 0, self.buf_type)
     }
 
@@ -255,10 +285,6 @@ impl Rel {
     fn num_pages(&self, buf_mgr: &mut BufMgr) -> Result<u64, std::io::Error> {
         let rel_filename = buf_mgr.key_to_filename(self.meta_buf_key());
         Ok(utils::file_len(&rel_filename)? / PAGE_SIZE as u64 - 1)
-    }
-
-    fn to_filename(&self) -> String {
-        format!("{}.dat", self.rel_id)
     }
 }
 

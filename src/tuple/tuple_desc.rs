@@ -82,6 +82,7 @@ impl TupleDesc {
         data
     }
 
+    // TODO update after exec is fully implemented
     pub fn data_to_strings(
         &self,
         bytes: &[u8],
@@ -108,6 +109,20 @@ impl TupleDesc {
             None => full_data,
         };
         Some(result)
+    }
+
+    pub fn cols(&self, bytes: &[u8]) -> Vec<Vec<u8>> {
+        let mut cols = vec![];
+        let mut cur_bytes = 0;
+        for attr in self.attr_types.iter() {
+            let attr_len = attr
+                .data_size(Some(&bytes[cur_bytes..bytes.len()]))
+                .unwrap();
+            cols.push(bytes[cur_bytes..cur_bytes + attr_len].to_vec());
+            cur_bytes += attr_len;
+        }
+
+        cols
     }
 
     pub fn assert_data_len(&self, data: &[u8]) -> Result<(), std::io::Error> {

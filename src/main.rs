@@ -9,6 +9,8 @@ extern crate nom_sql;
 
 #[macro_use]
 mod utils;
+#[macro_use]
+mod rel;
 
 mod data_type;
 mod db_state;
@@ -16,7 +18,6 @@ mod exec;
 mod internal_types;
 mod log;
 mod meta;
-mod rel;
 mod storage;
 mod tuple;
 

@@ -61,7 +61,7 @@ pub fn get_table_id(
             let vals = rel.data_to_strings(data, None).unwrap();
             vals[0].clone() == name
         },
-        |data| {
+        |data, _db_state| {
             id = rel.data_to_strings(data, None).unwrap()[1].clone();
         },
     )?;
