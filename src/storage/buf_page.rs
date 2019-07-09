@@ -54,6 +54,22 @@ impl BufPage {
         })
     }
 
+    pub fn clear(&mut self) {
+        self.buf = BufPage::default_buf();
+        self.lsn = 0;
+        self.upper_ptr = PAGE_SIZE;
+        self.lower_ptr = HEADER_SIZE;
+    }
+
+    pub fn clone_from(&mut self, other: &BufPage) {
+        assert_eq!(other.buf.len(), PAGE_SIZE);
+
+        self.buf = other.buf.clone();
+        self.lsn = other.lsn;
+        self.upper_ptr = other.upper_ptr;
+        self.lower_ptr = other.lower_ptr;
+    }
+
     pub fn write_tuple_data(
         &mut self,
         tuple_data: &[u8],
