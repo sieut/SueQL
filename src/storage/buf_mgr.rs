@@ -248,6 +248,12 @@ impl BufMgr {
         }
     }
 
+    pub fn new_mem_buf(&mut self) -> Result<TableItem, io::Error> {
+        use storage::BufType;
+        let id = self.new_mem_id();
+        self.new_buf(&BufKey::new(id, 0, BufType::Mem))
+    }
+
     // TODO refactor, combine with new_mem_id
     pub fn new_temp_id(&mut self) -> ID {
         let mut temp_cnt = self.temp_counter.lock().unwrap();
