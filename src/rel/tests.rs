@@ -64,8 +64,6 @@ fn test_write_tuple() {
 
 #[test]
 fn test_rel_lock_macro() -> Result<(), std::io::Error> {
-    use std::thread;
-
     let data_dir = "test_rel_lock_macro";
     let mut db_state = setup(data_dir);
 

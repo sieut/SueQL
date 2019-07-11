@@ -82,31 +82,22 @@ impl TupleDesc {
         data
     }
 
-    // TODO update after exec is fully implemented
     pub fn data_to_strings(
         &self,
         bytes: &[u8],
         filter_indices: Option<Vec<usize>>,
     ) -> Option<Vec<String>> {
-        let mut full_data = vec![];
-        let mut bytes_used = 0;
-        for attr in self.attr_types.iter() {
-            let attr_size = attr
-                .data_size(Some(&bytes[bytes_used..bytes.len()]))
-                .unwrap();
-            let slice = &bytes[bytes_used..bytes_used + attr_size];
-            match attr.data_to_string(slice) {
-                Some(string) => full_data.push(string),
-                None => {
-                    return None;
-                }
-            };
-            bytes_used += attr.data_size(Some(slice)).unwrap();
-        }
-
+        let cols = self.cols(bytes);
         let result = match filter_indices {
-            Some(vec) => vec.iter().map(|i| full_data[*i].clone()).collect(),
-            None => full_data,
+            Some(vec) => vec
+                .iter()
+                .map(|&i| self.attr_types[i].data_to_string(&cols[i]).unwrap())
+                .collect(),
+            None => self.attr_types
+                .iter()
+                .enumerate()
+                .map(|(i, attr)| attr.data_to_string(&cols[i]).unwrap())
+                .collect(),
         };
         Some(result)
     }

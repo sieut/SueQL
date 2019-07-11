@@ -15,7 +15,6 @@ impl ExecNode for Projection {
         match (self.src.output(), self.output()) {
             (DataStore::Rel(input), DataStore::Rel(output)) => {
                 rel_write_lock!(output, db_state.buf_mgr);
-
                 let buf = db_state.buf_mgr.new_mem_buf()?;
                 let mut buf_guard = buf.write().unwrap();
 
@@ -42,6 +41,19 @@ impl ExecNode for Projection {
                     },
                 )?;
 
+                Ok(())
+            }
+            (DataStore::Rel(input), DataStore::Out) => {
+                input.scan(
+                    db_state,
+                    |_| true,
+                    |data, _db_state| {
+                        let outputs = input
+                            .data_to_strings(data, Some(self.indices.clone()))
+                            .unwrap();
+                        println!("{:?}", outputs);
+                    },
+                )?;
                 Ok(())
             }
             _ => Ok(()),

@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub enum DataStore {
     Literal,
     Rel(Rel),
+    Out,
 }
 
 impl ExecNode for DataStore {
