@@ -40,46 +40,46 @@ impl TupleDesc {
     }
 
     pub fn to_data(&self) -> Vec<Vec<u8>> {
-        let mut result = vec![];
-        for i in 0..self.attr_types.len() {
-            let mut data = self.attr_types[i].to_data();
-            let mut name_data = DataType::VarChar
-                .string_to_data(&self.attr_names[i])
-                .unwrap();
-            data.append(&mut name_data);
-            result.push(data);
-        }
-
-        result
+        (0..self.num_attrs() as usize)
+            .map(|i| {
+                vec![
+                    self.attr_types[i].to_data(),
+                    DataType::VarChar
+                        .string_to_data(&self.attr_names[i])
+                        .unwrap(),
+                ]
+                .concat()
+            })
+            .collect::<Vec<_>>()
     }
 
     pub fn data_from_literal(
         &self,
         inputs: Vec<Vec<Literal>>,
     ) -> Vec<TupleData> {
-        let mut tuples = vec![];
-        for tup in inputs.iter() {
-            let mut data = vec![];
-            for (index, input) in tup.iter().enumerate() {
-                let data_type = self.attr_types.get(index).unwrap();
-                let mut bytes = data_type.data_from_literal(&input).unwrap();
-                data.append(&mut bytes);
-            }
-            tuples.push(data);
-        }
-
-        tuples
+        inputs
+            .iter()
+            .map(|tup| {
+                tup.iter()
+                    .enumerate()
+                    .map(|(i, literal)| {
+                        self.attr_types[i].data_from_literal(&literal).unwrap()
+                    })
+                    .collect::<Vec<_>>()
+                    .concat()
+            })
+            .collect()
     }
 
     pub fn create_tuple_data(&self, inputs: Vec<String>) -> TupleData {
-        let mut data = vec![];
-        for (index, input) in inputs.iter().enumerate() {
-            let data_type = self.attr_types.get(index).unwrap();
-            let mut col_data = data_type.string_to_data(&input).unwrap();
-            data.append(&mut col_data);
-        }
-
-        data
+        inputs
+            .iter()
+            .enumerate()
+            .map(|(i, input)| {
+                self.attr_types[i].string_to_data(&input).unwrap()
+            })
+            .collect::<Vec<_>>()
+            .concat()
     }
 
     pub fn data_to_strings(
