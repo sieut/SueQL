@@ -8,6 +8,16 @@ pub struct Projection {
     indices: Vec<usize>,
 }
 
+impl Projection {
+    pub fn new(
+        src: Arc<ExecNode>,
+        dest: DataStore,
+        indices: Vec<usize>,
+    ) -> Projection {
+        Projection { src, dest, indices }
+    }
+}
+
 impl ExecNode for Projection {
     fn exec(&self, db_state: &mut DbState) -> Result<(), std::io::Error> {
         self.src.exec(db_state)?;

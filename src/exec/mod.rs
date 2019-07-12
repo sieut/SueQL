@@ -1,9 +1,11 @@
 pub mod data_store;
 pub mod exec_node;
+mod planner;
 pub mod projection;
 
 pub use self::data_store::DataStore;
 pub use self::exec_node::ExecNode;
+pub use self::projection::Projection;
 
 use db_state::DbState;
 use nom_sql;
@@ -19,7 +21,10 @@ pub fn exec(
     match query {
         SqlQuery::CreateTable(stmt) => create_table(stmt, db_state),
         SqlQuery::Insert(stmt) => insert(stmt, db_state),
-        SqlQuery::Select(stmt) => select(stmt, db_state),
+        SqlQuery::Select(stmt) => match planner::plan_select(stmt, db_state)? {
+            Some(node) => node.exec(db_state),
+            None => Ok(()),
+        },
         _ => Ok(()),
     }
 }
@@ -48,29 +53,6 @@ fn create_table(
     Ok(())
 }
 
-fn select(
-    stmt: nom_sql::SelectStatement,
-    db_state: &mut DbState,
-) -> Result<(), std::io::Error> {
-    use storage::BufType;
-    // Only Select from 1 table rn
-    let table_id = utils::get_table_id(stmt.tables[0].name.clone(), db_state)?;
-    let rel = Rel::load(table_id, BufType::Data, db_state)?;
-    let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
-
-    rel.scan(
-        db_state,
-        |_| true,
-        |data, _db_state| {
-            println!(
-                "{:?}",
-                rel.data_to_strings(data, Some(fields.clone())).unwrap()
-            )
-        },
-    )?;
-    Ok(())
-}
-
 fn insert(
     stmt: nom_sql::InsertStatement,
     db_state: &mut DbState,
@@ -84,24 +66,4 @@ fn insert(
         rel.write_new_tuple(&*tup, db_state)?;
     }
     Ok(())
-}
-
-fn build_select_fields(
-    fields: &Vec<nom_sql::FieldDefinitionExpression>,
-    tuple_desc: tuple::tuple_desc::TupleDesc,
-) -> Vec<usize> {
-    use nom_sql::FieldDefinitionExpression;
-    fields
-        .iter()
-        .map(|field| match field {
-            FieldDefinitionExpression::All => {
-                (0..tuple_desc.num_attrs() as usize).collect()
-            }
-            FieldDefinitionExpression::Col(column) => {
-                vec![tuple_desc.attr_index(&column.name).unwrap()]
-            }
-            _ => vec![],
-        })
-        .collect::<Vec<_>>()
-        .concat()
 }
