@@ -93,7 +93,8 @@ impl TupleDesc {
                 .iter()
                 .map(|&i| self.attr_types[i].data_to_string(&cols[i]).unwrap())
                 .collect(),
-            None => self.attr_types
+            None => self
+                .attr_types
                 .iter()
                 .enumerate()
                 .map(|(i, attr)| attr.data_to_string(&cols[i]).unwrap())

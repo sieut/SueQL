@@ -91,21 +91,17 @@ fn build_select_fields(
     tuple_desc: tuple::tuple_desc::TupleDesc,
 ) -> Vec<usize> {
     use nom_sql::FieldDefinitionExpression;
-
-    let mut result = vec![];
-    for field in fields.iter() {
-        match field {
+    fields
+        .iter()
+        .map(|field| match field {
             FieldDefinitionExpression::All => {
-                result.append(
-                    &mut (0..tuple_desc.num_attrs() as usize).collect(),
-                );
+                (0..tuple_desc.num_attrs() as usize).collect()
             }
             FieldDefinitionExpression::Col(column) => {
-                result.push(tuple_desc.attr_index(&column.name).unwrap());
+                vec![tuple_desc.attr_index(&column.name).unwrap()]
             }
-            _ => {}
-        }
-    }
-
-    result
+            _ => vec![],
+        })
+        .collect::<Vec<_>>()
+        .concat()
 }
