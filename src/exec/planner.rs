@@ -1,11 +1,21 @@
 use db_state::DbState;
 use exec::{DataStore, ExecNode};
-use nom_sql::{FieldDefinitionExpression, InsertStatement, SelectStatement};
+use nom_sql::{
+    CreateTableStatement, FieldDefinitionExpression, InsertStatement,
+    SelectStatement,
+};
 use rel::Rel;
 use std::sync::Arc;
 use storage::BufType;
 use tuple::TupleDesc;
 use utils;
+
+pub fn plan_create(
+    stmt: CreateTableStatement,
+) -> Result<Option<Box<ExecNode>>, std::io::Error> {
+    use exec::CreateTable;
+    Ok(Some(Box::new(CreateTable::new(stmt))))
+}
 
 pub fn plan_insert(
     stmt: InsertStatement,

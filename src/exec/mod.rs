@@ -1,9 +1,11 @@
+pub mod create_table;
 pub mod data_store;
 pub mod exec_node;
 pub mod insert;
 mod planner;
 pub mod projection;
 
+pub use self::create_table::CreateTable;
 pub use self::data_store::DataStore;
 pub use self::exec_node::ExecNode;
 pub use self::insert::Insert;
@@ -20,7 +22,10 @@ pub fn exec(
     db_state: &mut DbState,
 ) -> Result<(), std::io::Error> {
     match query {
-        SqlQuery::CreateTable(stmt) => create_table(stmt, db_state),
+        SqlQuery::CreateTable(stmt) => match planner::plan_create(stmt)? {
+            Some(node) => node.exec(db_state),
+            None => Ok(()),
+        },
         SqlQuery::Insert(stmt) => match planner::plan_insert(stmt, db_state)? {
             Some(node) => node.exec(db_state),
             None => Ok(()),
@@ -31,28 +36,4 @@ pub fn exec(
         },
         _ => Ok(()),
     }
-}
-
-fn create_table(
-    stmt: nom_sql::CreateTableStatement,
-    db_state: &mut DbState,
-) -> Result<(), std::io::Error> {
-    use data_type::DataType;
-    use tuple::tuple_desc::TupleDesc;
-
-    let attr_types: Vec<DataType> = stmt
-        .fields
-        .iter()
-        .map(|ref field| {
-            DataType::from_nom_type(field.sql_type.clone()).unwrap()
-        })
-        .collect();
-    let attr_names: Vec<String> = stmt
-        .fields
-        .iter()
-        .map(|ref field| field.column.name.clone())
-        .collect();
-    let tuple_desc = TupleDesc::new(attr_types, attr_names);
-    Rel::new(stmt.table.name, tuple_desc, db_state)?;
-    Ok(())
 }
