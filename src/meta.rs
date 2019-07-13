@@ -97,7 +97,7 @@ impl Meta {
     }
 
     const fn default_id_counter() -> [u8; 4] {
-        [0u8, 0u8, 0u8, 2u8]
+        [2u8, 0u8, 0u8, 0u8]
     }
 }
 
