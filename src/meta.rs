@@ -4,7 +4,7 @@ use db_state::State;
 use internal_types::{ID, LSN};
 use rel::Rel;
 use std::io::Cursor;
-use storage::buf_mgr::TableItem;
+use storage::buf_mgr::PageLock;
 use storage::{BufKey, BufMgr, BufType};
 use tuple::tuple_desc::TupleDesc;
 use tuple::tuple_ptr::TuplePtr;
@@ -21,7 +21,7 @@ static CUR_LSN_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 2);
 #[derive(Clone, Debug)]
 pub struct Meta {
     // Keep hold of page from BufMgr so it's never evicted
-    buf: TableItem,
+    buf: PageLock,
 }
 
 impl Meta {

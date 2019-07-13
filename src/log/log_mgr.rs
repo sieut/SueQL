@@ -1,7 +1,7 @@
 use internal_types::ID;
 use log::{LogEntry, OpType};
 use std::sync::{Arc, RwLock};
-use storage::buf_mgr::TableItem;
+use storage::buf_mgr::PageLock;
 use storage::{BufKey, BufMgr, BufType, Storable};
 use tuple::TuplePtr;
 
@@ -11,7 +11,7 @@ static LAST_CP_PTR: TuplePtr = TuplePtr::new(LOG_META_KEY, 0);
 
 #[derive(Clone, Debug)]
 pub struct LogMgr {
-    meta_page: TableItem,
+    meta_page: PageLock,
     cur_page_key: Arc<RwLock<BufKey>>,
     last_cp: Arc<RwLock<TuplePtr>>,
 }

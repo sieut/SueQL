@@ -34,14 +34,14 @@ pub type WriteGuard<'a> = std::sync::RwLockWriteGuard<'a, BufPage>;
 pub type ReadGuard<'a> = std::sync::RwLockReadGuard<'a, BufPage>;
 
 #[derive(Clone, Debug)]
-pub struct TableItem {
+pub struct PageLock {
     page: Arc<RwLock<BufPage>>,
     info: Arc<RwLock<BufInfo>>,
 }
 
-impl TableItem {
-    fn new(page: BufPage) -> TableItem {
-        TableItem {
+impl PageLock {
+    fn new(page: BufPage) -> PageLock {
+        PageLock {
             page: Arc::new(RwLock::new(page)),
             info: Arc::new(RwLock::new(BufInfo {
                 ref_bit: false,
@@ -78,20 +78,20 @@ impl TableItem {
     }
 }
 
-impl evmap::ShallowCopy for TableItem {
+impl evmap::ShallowCopy for PageLock {
     unsafe fn shallow_copy(&mut self) -> Self {
         self.clone()
     }
 }
 
-impl PartialEq for TableItem {
-    fn eq(&self, other: &TableItem) -> bool {
+impl PartialEq for PageLock {
+    fn eq(&self, other: &PageLock) -> bool {
         Arc::ptr_eq(&self.page, &other.page)
             && Arc::ptr_eq(&self.info, &other.info)
     }
 }
 
-impl Eq for TableItem {}
+impl Eq for PageLock {}
 
 #[derive(Debug)]
 pub struct BufInfo {
@@ -101,8 +101,8 @@ pub struct BufInfo {
 
 #[derive(Clone)]
 pub struct BufMgr {
-    buf_table_r: evmap::ReadHandle<BufKey, TableItem>,
-    buf_table_w: Arc<Mutex<evmap::WriteHandle<BufKey, TableItem>>>,
+    buf_table_r: evmap::ReadHandle<BufKey, PageLock>,
+    buf_table_w: Arc<Mutex<evmap::WriteHandle<BufKey, PageLock>>>,
     evict_queue: Arc<Mutex<VecDeque<BufKey>>>,
     max_size: Arc<usize>,
     data_dir: Arc<String>,
@@ -112,7 +112,7 @@ pub struct BufMgr {
 
 impl BufMgr {
     pub fn new(settings: DbSettings) -> BufMgr {
-        let buf_table = evmap::new::<BufKey, TableItem>();
+        let buf_table = evmap::new::<BufKey, PageLock>();
 
         BufMgr {
             buf_table_r: buf_table.0,
@@ -142,7 +142,7 @@ impl BufMgr {
         self.buf_table_r.contains_key(key)
     }
 
-    pub fn get_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
+    pub fn get_buf(&mut self, key: &BufKey) -> Result<PageLock, io::Error> {
         use std::io::{Error, ErrorKind};
         use storage::BufType;
 
@@ -211,7 +211,7 @@ impl BufMgr {
         }
     }
 
-    pub fn new_buf(&mut self, key: &BufKey) -> Result<TableItem, io::Error> {
+    pub fn new_buf(&mut self, key: &BufKey) -> Result<PageLock, io::Error> {
         use std::io::{Error, ErrorKind};
         use storage::BufType;
 
@@ -252,7 +252,7 @@ impl BufMgr {
         }
     }
 
-    pub fn new_mem_buf(&mut self) -> Result<TableItem, io::Error> {
+    pub fn new_mem_buf(&mut self) -> Result<PageLock, io::Error> {
         use storage::BufType;
         let id = self.new_mem_id();
         self.new_buf(&BufKey::new(id, 0, BufType::Mem))
@@ -284,7 +284,7 @@ impl BufMgr {
         &mut self,
         buf: Vec<u8>,
         key: &BufKey,
-    ) -> Result<TableItem, io::Error> {
+    ) -> Result<PageLock, io::Error> {
         let mut buf_w = self.buf_table_w.lock().unwrap();
         let mut evict_q = self.evict_queue.lock().unwrap();
 
@@ -327,7 +327,7 @@ impl BufMgr {
         insert!(
             buf_w,
             key.clone(),
-            TableItem::new(BufPage::load_from(&buf, key)?)
+            PageLock::new(BufPage::load_from(&buf, key)?)
         );
         evict_q.push_back(key.clone());
 
@@ -338,7 +338,7 @@ impl BufMgr {
         key.to_filename(self.data_dir())
     }
 
-    fn get_item(&self, key: &BufKey) -> Option<TableItem> {
+    fn get_item(&self, key: &BufKey) -> Option<PageLock> {
         self.buf_table_r.get_and(key, |items| items[0].clone())
     }
 

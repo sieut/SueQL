@@ -12,10 +12,7 @@ pub use self::insert::Insert;
 pub use self::projection::Projection;
 
 use db_state::DbState;
-use nom_sql;
 use nom_sql::SqlQuery;
-use rel::Rel;
-use utils;
 
 pub fn exec(
     query: SqlQuery,
