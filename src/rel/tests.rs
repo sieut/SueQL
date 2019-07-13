@@ -45,7 +45,9 @@ fn test_write_tuple() {
         Literal::String("c".to_string()),
         Literal::Integer(1),
     ]]);
-    let ptr = rel.write_new_tuple(&tuples[0], &mut db_state).unwrap();
+    let ptrs = rel.write_tuples(tuples.clone(), &mut db_state).unwrap();
+    assert_eq!(ptrs.len(), 1);
+    let ptr = ptrs.get(0).unwrap();
 
     let written_tuple;
     let lsn;

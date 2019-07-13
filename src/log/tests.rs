@@ -116,8 +116,7 @@ fn test_recovery() {
         vec![Literal::String("a".to_string()), Literal::Integer(1)],
         vec![Literal::String("b".to_string()), Literal::Integer(2)],
     ]);
-    rel.write_new_tuple(&tuples[0], &mut db_state).unwrap();
-    rel.write_new_tuple(&tuples[1], &mut db_state).unwrap();
+    rel.write_tuples(tuples, &mut db_state).unwrap();
 
     // Restart db, basically
     let mut db_state = setup(data_dir);

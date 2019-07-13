@@ -1,6 +1,6 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use db_state::DbState;
-use internal_types::{ID, LSN};
+use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
@@ -98,7 +98,7 @@ impl Rel {
         let new_entry = table_rel
             .tuple_desc
             .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
-        table_rel.write_new_tuple(&new_entry, db_state)?;
+        table_rel.write_tuples(vec![new_entry], db_state)?;
 
         Ok(rel)
     }
@@ -132,44 +132,49 @@ impl Rel {
         Ok(rel)
     }
 
-    pub fn write_new_tuple(
+    pub fn write_tuples(
         &self,
-        data: &[u8],
+        mut tuples: Vec<TupleData>,
         db_state: &mut DbState,
-    ) -> Result<TuplePtr, std::io::Error> {
-        self.tuple_desc.assert_data_len(data)?;
-        rel_write_lock!(self, db_state.buf_mgr);
-
-        let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
-        let data_page = db_state.buf_mgr.get_buf(&last_buf_key)?;
-        let mut lock = data_page.write().unwrap();
-
-        if lock.available_data_space() >= data.len() {
-            let lsn = match self.buf_type {
-                BufType::Data => Some(self.write_insert_log(
-                    lock.buf_key,
-                    data.to_vec(),
-                    db_state,
-                )?),
-                _ => None,
-            };
-            lock.write_tuple_data(data, None, lsn)
+    ) -> Result<Vec<TuplePtr>, std::io::Error> {
+        for tup in tuples.iter() {
+            self.tuple_desc.assert_data_len(&tup)?;
         }
-        // Not enough space in page, have to create a new one
-        else {
-            let new_page =
-                db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
-            let mut lock = new_page.write().unwrap();
 
-            let lsn = match self.buf_type {
-                BufType::Data => Some(self.write_insert_log(
-                    lock.buf_key,
-                    data.to_vec(),
-                    db_state,
-                )?),
-                _ => None,
-            };
-            lock.write_tuple_data(data, None, lsn)
+        rel_write_lock!(self, db_state.buf_mgr);
+        let mut page_key = self.last_buf_key(&mut db_state.buf_mgr)?;
+        let mut result = vec![];
+        tuples.reverse();
+
+        loop {
+            let page = db_state.buf_mgr.get_buf(&page_key)?;
+            let mut guard = page.write().unwrap();
+
+            loop {
+                match tuples.pop() {
+                    Some(tup) => {
+                        if guard.available_data_space() < tup.len() {
+                            page_key = page_key.inc_offset();
+                            tuples.push(tup);
+                            break;
+                        } else {
+                            let lsn = match self.buf_type {
+                                BufType::Data => Some(self.write_insert_log(
+                                    guard.buf_key,
+                                    tup.clone(),
+                                    db_state,
+                                )?),
+                                _ => None,
+                            };
+                            result
+                                .push(guard.write_tuple_data(&tup, None, lsn)?);
+                        }
+                    }
+                    None => {
+                        return Ok(result);
+                    }
+                }
+            }
         }
     }
 
