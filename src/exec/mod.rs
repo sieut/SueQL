@@ -1,17 +1,18 @@
 pub mod data_store;
 pub mod exec_node;
+pub mod insert;
 mod planner;
 pub mod projection;
 
 pub use self::data_store::DataStore;
 pub use self::exec_node::ExecNode;
+pub use self::insert::Insert;
 pub use self::projection::Projection;
 
 use db_state::DbState;
 use nom_sql;
 use nom_sql::SqlQuery;
 use rel::Rel;
-use tuple;
 use utils;
 
 pub fn exec(
@@ -20,7 +21,10 @@ pub fn exec(
 ) -> Result<(), std::io::Error> {
     match query {
         SqlQuery::CreateTable(stmt) => create_table(stmt, db_state),
-        SqlQuery::Insert(stmt) => insert(stmt, db_state),
+        SqlQuery::Insert(stmt) => match planner::plan_insert(stmt, db_state)? {
+            Some(node) => node.exec(db_state),
+            None => Ok(()),
+        },
         SqlQuery::Select(stmt) => match planner::plan_select(stmt, db_state)? {
             Some(node) => node.exec(db_state),
             None => Ok(()),
@@ -50,20 +54,5 @@ fn create_table(
         .collect();
     let tuple_desc = TupleDesc::new(attr_types, attr_names);
     Rel::new(stmt.table.name, tuple_desc, db_state)?;
-    Ok(())
-}
-
-fn insert(
-    stmt: nom_sql::InsertStatement,
-    db_state: &mut DbState,
-) -> Result<(), std::io::Error> {
-    use storage::BufType;
-
-    let table_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
-    let rel = Rel::load(table_id, BufType::Data, db_state)?;
-    let tuples = rel.data_from_literal(stmt.data.clone());
-    for tup in tuples.iter() {
-        rel.write_new_tuple(&*tup, db_state)?;
-    }
     Ok(())
 }

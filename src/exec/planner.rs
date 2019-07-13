@@ -1,11 +1,29 @@
 use db_state::DbState;
 use exec::{DataStore, ExecNode};
-use nom_sql::{FieldDefinitionExpression, SelectStatement};
+use nom_sql::{FieldDefinitionExpression, InsertStatement, SelectStatement};
 use rel::Rel;
 use std::sync::Arc;
 use storage::BufType;
 use tuple::TupleDesc;
 use utils;
+
+pub fn plan_insert(
+    stmt: InsertStatement,
+    db_state: &mut DbState,
+) -> Result<Option<Box<ExecNode>>, std::io::Error> {
+    use exec::Insert;
+
+    let rel_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
+    let rel = Rel::load(rel_id, BufType::Data, db_state)?;
+    let tuples = rel.data_from_literal(stmt.data.clone());
+    Ok(Some(Box::new(Insert::new(
+        Arc::new(DataStore::Data {
+            tuples,
+            desc: rel.tuple_desc(),
+        }),
+        DataStore::Rel(rel),
+    ))))
+}
 
 pub fn plan_select(
     stmt: SelectStatement,

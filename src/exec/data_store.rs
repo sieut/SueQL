@@ -1,11 +1,16 @@
 use db_state::DbState;
 use exec::ExecNode;
+use internal_types::TupleData;
 use rel::Rel;
 use std::sync::Arc;
+use tuple::TupleDesc;
 
 #[derive(Clone)]
 pub enum DataStore {
-    Literal,
+    Data {
+        tuples: Vec<TupleData>,
+        desc: TupleDesc,
+    },
     Rel(Rel),
     Out,
 }
