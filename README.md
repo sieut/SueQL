@@ -14,7 +14,9 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
         - [X] Recovery
     - [X] WAL on writes
     - [X] Tests
- - [ ] Exec plan
+ - [ ] Exec
+    - [X] Exec plan
+    - [ ] Optimizer
  - [ ] Index
     - [ ] BTree
     - [ ] Hash
