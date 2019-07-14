@@ -12,7 +12,7 @@ fn test_write_new_tuple() {
     let tuple_ptr = buf_page.write_tuple_data(&test_data, None, None).unwrap();
     assert_eq!(tuple_ptr.buf_offset, 0);
 
-    let mut reader = Cursor::new(&buf_page.buf()[4..10]);
+    let mut reader = Cursor::new(&buf_page.buf()[4..8]);
     // upper_ptr
     assert_eq!(
         reader.read_u16::<LittleEndian>().unwrap() as usize,
@@ -23,6 +23,7 @@ fn test_write_new_tuple() {
         reader.read_u16::<LittleEndian>().unwrap() as usize,
         HEADER_SIZE + 4
     );
+    let mut reader = Cursor::new(&buf_page.buf()[HEADER_SIZE..HEADER_SIZE + 4]);
     // tuple_ptr
     assert_eq!(
         reader.read_u16::<LittleEndian>().unwrap() as usize,
@@ -66,7 +67,9 @@ fn test_buf_page_iter() {
 }
 
 fn new_page() -> BufPage {
-    let mut buffer = [0u8; PAGE_SIZE];
-    buffer.copy_from_slice(&BufPage::default_buf());
-    BufPage::load_from(&buffer, &BufKey::new(0, 0, BufType::Data)).unwrap()
+    BufPage::load_from(
+        &BufPage::default_buf(),
+        &BufKey::new(0, 0, BufType::Data),
+    )
+    .unwrap()
 }

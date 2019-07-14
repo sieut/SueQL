@@ -1,5 +1,8 @@
+extern crate num;
+
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
+use enum_primitive::FromPrimitive;
 use internal_types::LSN;
 use std::io::Cursor;
 use std::iter::Iterator;
@@ -7,10 +10,12 @@ use storage::buf_key::BufKey;
 use storage::PAGE_SIZE;
 use tuple::tuple_ptr::TuplePtr;
 
-pub const HEADER_SIZE: usize = 8;
+pub const HEADER_SIZE: usize = 12;
 const LSN_RANGE: std::ops::Range<usize> = (0..4);
 const UPPER_PTR_RANGE: std::ops::Range<usize> = (4..6);
 const LOWER_PTR_RANGE: std::ops::Range<usize> = (6..8);
+// NOTE SpaceFlag has 4 bytes now for alignment, update this when new flags are introduced
+const SPACE_PTR_RANGE: std::ops::Range<usize> = (8..12);
 
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
@@ -20,6 +25,7 @@ pub struct BufPage {
     pub lsn: LSN,
     pub upper_ptr: PagePtr,
     pub lower_ptr: PagePtr,
+    space_flag: SpaceFlag,
     // BufKey for assertions
     pub buf_key: BufKey,
 }
@@ -32,6 +38,10 @@ impl BufPage {
         LittleEndian::write_u32(&mut vec[LSN_RANGE], 0);
         LittleEndian::write_u16(&mut vec[UPPER_PTR_RANGE], PAGE_SIZE as u16);
         LittleEndian::write_u16(&mut vec[LOWER_PTR_RANGE], HEADER_SIZE as u16);
+        LittleEndian::write_u32(
+            &mut vec[SPACE_PTR_RANGE],
+            SpaceFlag::Standard as u32,
+        );
         vec
     }
 
@@ -39,17 +49,30 @@ impl BufPage {
         buffer: &[u8],
         buf_key: &BufKey,
     ) -> Result<BufPage, std::io::Error> {
+        use std::io::{Error, ErrorKind};
+
         assert_eq!(buffer.len(), PAGE_SIZE);
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
         let lsn = reader.read_u32::<LittleEndian>()?;
         let upper_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;
         let lower_ptr = reader.read_u16::<LittleEndian>()? as PagePtr;
+        let space_flag =
+            match SpaceFlag::from_u32(reader.read_u32::<LittleEndian>()?) {
+                Some(flag) => flag,
+                None => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidInput,
+                        "Undefined flag",
+                    ))
+                }
+            };
 
         Ok(BufPage {
             buf: buffer.to_vec(),
             lsn,
             upper_ptr,
             lower_ptr,
+            space_flag,
             buf_key: buf_key.clone(),
         })
     }
@@ -59,6 +82,7 @@ impl BufPage {
         self.lsn = 0;
         self.upper_ptr = PAGE_SIZE;
         self.lower_ptr = HEADER_SIZE;
+        self.space_flag = SpaceFlag::Standard;
     }
 
     pub fn clone_from(&mut self, other: &BufPage) {
@@ -249,5 +273,16 @@ impl std::fmt::Debug for BufPage {
                }}",
             self.lsn, self.upper_ptr, self.lower_ptr, self.buf_key
         )
+    }
+}
+
+enum_from_primitive! {
+    /// Flag to help control deleting of tuples
+    ///  - Standard: Page is in standard format
+    ///  - Gaps: Tuple(s) deleted from page, leaving gaps that can be filled in
+    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+    enum SpaceFlag {
+        Standard,
+        Gaps,
     }
 }
