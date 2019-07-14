@@ -160,9 +160,7 @@ impl BufPage {
         // Write tuple
         self.buf[page_ptr..page_ptr + tuple_data.len()]
             .clone_from_slice(tuple_data);
-        // Write lsn
-        self.lsn = lsn.unwrap_or(self.lsn);
-        LittleEndian::write_u32(&mut self.buf[LSN_RANGE], self.lsn as u32);
+        self.update_lsn(lsn);
 
         Ok(TuplePtr::new(self.buf_key.clone(), ret_offset))
     }
@@ -172,14 +170,48 @@ impl BufPage {
         tuple_ptr: &TuplePtr,
     ) -> Result<&[u8], std::io::Error> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
-        let mut reader = Cursor::new(
-            &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
-                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)],
-        );
-        let start = reader.read_u16::<LittleEndian>()? as usize;
-        let end = reader.read_u16::<LittleEndian>()? as usize;
-
+        let (start, end) = self.get_tuple_range(tuple_ptr)?;
         Ok(&self.buf[start..end])
+    }
+
+    pub fn remove_tuple(
+        &mut self,
+        tuple_ptr: &TuplePtr,
+        lsn: Option<LSN>,
+    ) -> Result<(), std::io::Error> {
+        self.is_valid_tuple_ptr(tuple_ptr)?;
+        // Make ptr invalid
+        self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
+            ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)]
+            .clone_from_slice(&[0u8, 0u8, 0u8, 0u8]);
+        // Update space_flag
+        LittleEndian::write_u32(
+            &mut self.buf[SPACE_PTR_RANGE],
+            SpaceFlag::Gaps as u32,
+        );
+        self.space_flag = SpaceFlag::Gaps;
+        // Update LSN
+        self.update_lsn(lsn);
+
+        Ok(())
+    }
+
+    pub fn next_ptr(
+        &self,
+        mut tuple_ptr: TuplePtr,
+    ) -> Result<TuplePtr, std::io::Error> {
+        self.is_valid_tuple_ptr(&tuple_ptr)?;
+        loop {
+            tuple_ptr.buf_offset += 1;
+            if tuple_ptr.buf_offset >= self.tuple_count() {
+                break Ok(tuple_ptr);
+            }
+
+            let (start, end) = self.get_tuple_range(&tuple_ptr)?;
+            if start != 0 && end != 0 {
+                break Ok(tuple_ptr);
+            }
+        }
     }
 
     pub fn iter(&self) -> Iter {
@@ -232,6 +264,29 @@ impl BufPage {
         Ok(tuple_data.len())
     }
 
+    fn update_lsn(&mut self, lsn: Option<LSN>) {
+        match lsn {
+            Some(lsn) => {
+                self.lsn = lsn;
+                LittleEndian::write_u32(&mut self.buf[LSN_RANGE], lsn as u32)
+            }
+            None => {}
+        }
+    }
+
+    fn get_tuple_range(
+        &self,
+        tuple_ptr: &TuplePtr,
+    ) -> Result<(PagePtr, PagePtr), std::io::Error> {
+        let mut reader = Cursor::new(
+            &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
+                ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)],
+        );
+        let start = reader.read_u16::<LittleEndian>()? as usize;
+        let end = reader.read_u16::<LittleEndian>()? as usize;
+        Ok((start, end))
+    }
+
     pub fn available_data_space(&self) -> usize {
         // - 4 because we also have to make space for a new ptr
         self.upper_ptr - self.lower_ptr - 4
@@ -247,9 +302,11 @@ impl<'a> Iterator for Iter<'a> {
     type Item = &'a [u8];
 
     fn next(&mut self) -> Option<Self::Item> {
+        let next_ptr = self.buf_page.next_ptr(self.tuple_ptr.clone());
+
         match self.buf_page.get_tuple_data(&self.tuple_ptr) {
             Ok(data) => {
-                self.tuple_ptr.inc_buf_offset();
+                self.tuple_ptr = next_ptr.unwrap();
                 Some(data)
             }
             Err(_) => None,

@@ -15,10 +15,6 @@ impl TuplePtr {
             buf_offset,
         }
     }
-
-    pub fn inc_buf_offset(&mut self) {
-        self.buf_offset += 1;
-    }
 }
 
 impl Storable for TuplePtr {

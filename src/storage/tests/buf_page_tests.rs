@@ -64,6 +64,24 @@ fn test_buf_page_iter() {
     let mut iter = buf_page.iter();
     assert_eq!(iter.next().unwrap().len(), 8);
     assert_eq!(iter.next().unwrap().len(), 16);
+    assert!(iter.next().is_none());
+}
+
+#[test]
+fn test_remove_tuple() {
+    let mut buf_page = new_page();
+    // Write some tuples
+    buf_page.write_tuple_data(&[0u8; 1], None, None).unwrap();
+    let to_remove = buf_page.write_tuple_data(&[1u8; 1], None, None).unwrap();
+    buf_page.write_tuple_data(&[2u8; 1], None, None).unwrap();
+    // Remove
+    buf_page.remove_tuple(&to_remove, None).unwrap();
+
+    let mut iter = buf_page.iter();
+    assert_eq!(iter.next().unwrap(), [0u8]);
+    assert_eq!(iter.next().unwrap(), [2u8]);
+    assert!(iter.next().is_none());
+    assert!(iter.next().is_none());
 }
 
 fn new_page() -> BufPage {
