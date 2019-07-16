@@ -107,9 +107,7 @@ impl BufPage {
         tuple_ptr: Option<&TuplePtr>,
         lsn: Option<LSN>,
     ) -> Result<TuplePtr, std::io::Error> {
-        let ret_offset;
-
-        let page_ptr: PagePtr = match tuple_ptr {
+        let (ret, page_ptr) = match tuple_ptr {
             Some(ptr) => {
                 self.is_valid_tuple_ptr(ptr)?;
                 // TODO handle this case
@@ -117,14 +115,8 @@ impl BufPage {
                 if self.get_tuple_len(ptr)? != tuple_data.len() {
                     panic!("Different sized tuple");
                 }
-
-                ret_offset = ptr.buf_offset;
-
-                let mut reader = Cursor::new(
-                    &self.buf[BufPage::offset_to_ptr(ptr.buf_offset)
-                        ..(BufPage::offset_to_ptr(ptr.buf_offset + 1))],
-                );
-                reader.read_u16::<LittleEndian>()? as usize
+                let (page_ptr, _) = self.get_tuple_range(ptr)?;
+                (ptr.clone(), page_ptr)
             }
             None => {
                 if self.available_data_space() < tuple_data.len() {
@@ -134,33 +126,16 @@ impl BufPage {
                         "Not enough space for tuple",
                     ));
                 }
-
-                ret_offset = BufPage::ptr_to_offset(self.lower_ptr);
-
+                let new_ptr = TuplePtr::new(
+                    self.buf_key.clone(),
+                    BufPage::ptr_to_offset(self.lower_ptr),
+                );
                 let new_start = self.upper_ptr - tuple_data.len();
                 let new_end = self.upper_ptr;
-                LittleEndian::write_u16(
-                    &mut self.buf[self.lower_ptr..self.lower_ptr + 2],
-                    new_start as u16,
-                );
-                LittleEndian::write_u16(
-                    &mut self.buf[self.lower_ptr + 2..self.lower_ptr + 4],
-                    new_end as u16,
-                );
-
-                self.lower_ptr += 4;
-                LittleEndian::write_u16(
-                    &mut self.buf[LOWER_PTR_RANGE],
-                    self.lower_ptr as u16,
-                );
-
-                self.upper_ptr -= tuple_data.len();
-                LittleEndian::write_u16(
-                    &mut self.buf[UPPER_PTR_RANGE],
-                    self.upper_ptr as u16,
-                );
-
-                new_start
+                self.write_start_end(&new_ptr, (new_start, new_end));
+                self.set_lower_ptr(self.lower_ptr + 4);
+                self.set_upper_ptr(self.upper_ptr - tuple_data.len());
+                (new_ptr, new_start)
             }
         };
 
@@ -169,7 +144,7 @@ impl BufPage {
             .clone_from_slice(tuple_data);
         self.update_lsn(lsn);
 
-        Ok(TuplePtr::new(self.buf_key.clone(), ret_offset))
+        Ok(ret)
     }
 
     pub fn get_tuple_data(
@@ -200,7 +175,7 @@ impl BufPage {
             self.buf[self.upper_ptr + tup_len..end].clone_from_slice(&data);
             // Update ptrs of shifted tuples
             let affected_ptrs: Vec<_> = self
-                .all_ptrs()
+                .get_all_ptrs()
                 .iter()
                 .cloned()
                 .filter(|ptr| {
@@ -218,20 +193,10 @@ impl BufPage {
             }
         }
 
-        // Update upper_ptr
-        self.upper_ptr += tup_len;
-        LittleEndian::write_u16(
-            &mut self.buf[UPPER_PTR_RANGE],
-            self.upper_ptr as u16,
-        );
+        self.set_upper_ptr(self.upper_ptr + tup_len);
 
         if last_ptr == *tuple_ptr {
-            // Update lower_ptr
-            self.lower_ptr -= 4;
-            LittleEndian::write_u16(
-                &mut self.buf[LOWER_PTR_RANGE],
-                self.lower_ptr as u16,
-            );
+            self.set_lower_ptr(self.lower_ptr - 4);
         } else {
             // Make ptr invalid
             self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
@@ -368,7 +333,23 @@ impl BufPage {
         );
     }
 
-    fn all_ptrs(&self) -> Vec<TuplePtr> {
+    fn set_upper_ptr(&mut self, ptr: PagePtr) {
+        self.upper_ptr = ptr;
+        LittleEndian::write_u16(
+            &mut self.buf[UPPER_PTR_RANGE],
+            self.upper_ptr as u16,
+        );
+    }
+
+    fn set_lower_ptr(&mut self, ptr: PagePtr) {
+        self.lower_ptr = ptr;
+        LittleEndian::write_u16(
+            &mut self.buf[LOWER_PTR_RANGE],
+            self.lower_ptr as u16,
+        );
+    }
+
+    fn get_all_ptrs(&self) -> Vec<TuplePtr> {
         (0..self.get_last_tuple_ptr().buf_offset)
             .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
             .filter(|ptr| {
@@ -379,8 +360,10 @@ impl BufPage {
     }
 
     pub fn available_data_space(&self) -> usize {
-        // - 4 because we also have to make space for a new ptr
-        self.upper_ptr - self.lower_ptr - 4
+        match self.space_flag {
+            SpaceFlag::Standard => self.upper_ptr - self.lower_ptr - 4,
+            SpaceFlag::Gaps => self.upper_ptr - self.lower_ptr,
+        }
     }
 }
 
