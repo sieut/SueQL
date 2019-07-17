@@ -126,10 +126,18 @@ impl BufPage {
                         "Not enough space for tuple",
                     ));
                 }
-                let new_ptr = TuplePtr::new(
-                    self.buf_key.clone(),
-                    BufPage::ptr_to_offset(self.lower_ptr),
-                );
+                let new_ptr = match self.space_flag {
+                    SpaceFlag::Standard => {
+                        TuplePtr::new(
+                            self.buf_key.clone(),
+                            BufPage::ptr_to_offset(self.lower_ptr),
+                        )
+                    }
+                    SpaceFlag::Gaps => {
+                        self.set_gap_count(self.gap_count - 1);
+                        self.get_gap()
+                    }
+                };
                 let new_start = self.upper_ptr - tuple_data.len();
                 let new_end = self.upper_ptr;
                 self.write_start_end(&new_ptr, (new_start, new_end));
@@ -181,7 +189,7 @@ impl BufPage {
                 .filter(|ptr| {
                     let (ptr_start, ptr_end) =
                         self.get_tuple_range(ptr).unwrap();
-                    ptr_start >= self.upper_ptr && ptr_end < start
+                    ptr_start >= self.upper_ptr && ptr_end <= start
                 })
                 .collect();
             for ptr in affected_ptrs.iter() {
@@ -203,16 +211,7 @@ impl BufPage {
                 ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)]
                 .clone_from_slice(&[0u8; 4]);
             // Update space_flag and gap_count
-            self.space_flag = SpaceFlag::Gaps;
-            LittleEndian::write_u16(
-                &mut self.buf[SPACE_FLAG_RANGE],
-                self.space_flag as u16,
-            );
-            self.gap_count += 1;
-            LittleEndian::write_u16(
-                &mut self.buf[GAP_COUNT_RANGE],
-                self.gap_count,
-            );
+            self.set_gap_count(self.gap_count + 1);
         }
 
         self.update_lsn(lsn);
@@ -349,14 +348,42 @@ impl BufPage {
         );
     }
 
+    fn set_gap_count(&mut self, count: u16) {
+        self.gap_count = count;
+        LittleEndian::write_u16(
+            &mut self.buf[GAP_COUNT_RANGE],
+            self.gap_count,
+        );
+
+        if self.gap_count == 0 {
+            self.space_flag = SpaceFlag::Standard;
+        } else {
+            self.space_flag = SpaceFlag::Gaps;
+        }
+        LittleEndian::write_u16(
+            &mut self.buf[SPACE_FLAG_RANGE],
+            self.space_flag as u16,
+        );
+    }
+
     fn get_all_ptrs(&self) -> Vec<TuplePtr> {
-        (0..self.get_last_tuple_ptr().buf_offset)
+        (0..self.get_last_tuple_ptr().buf_offset + 1)
             .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
             .filter(|ptr| {
                 let (start, end) = self.get_tuple_range(ptr).unwrap();
                 start != 0 && end != 0
             })
             .collect()
+    }
+
+    fn get_gap(&self) -> TuplePtr {
+        (0..self.get_last_tuple_ptr().buf_offset + 1)
+            .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
+            .find(|ptr| {
+                let (start, end) = self.get_tuple_range(ptr).unwrap();
+                start == 0 && end == 0
+            })
+            .unwrap()
     }
 
     pub fn available_data_space(&self) -> usize {
