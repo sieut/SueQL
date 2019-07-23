@@ -24,14 +24,17 @@ impl TupleDesc {
         }
     }
 
-    pub fn from_data(data: &Vec<Vec<u8>>) -> Result<TupleDesc, std::io::Error> {
+    pub fn from_data(data: Vec<u8>) -> Result<TupleDesc, std::io::Error> {
+        use storage::Storable;
+        let (num_attrs, mut data) = u16::from_data(data)?;
         let mut attr_types = vec![];
         let mut attr_names = vec![];
-        for bytes in data.iter() {
-            let attr_type = DataType::from_data(&bytes)?;
-            let attr_name = DataType::VarChar
-                .data_to_string(&bytes[attr_type.id_len()..bytes.len()])
-                .unwrap();
+        for _ in 0..num_attrs {
+            let (attr_type, leftover) = DataType::from_data(data)?;
+            let (name_len, mut leftover) = u16::from_data(leftover)?;
+            // TODO update this unwrap
+            let attr_name = String::from_utf8(leftover.drain(..name_len as usize).collect::<Vec<_>>()).unwrap();
+            data = leftover;
             attr_types.push(attr_type);
             attr_names.push(attr_name);
         }
@@ -39,8 +42,10 @@ impl TupleDesc {
         Ok(TupleDesc::new(attr_types, attr_names))
     }
 
-    pub fn to_data(&self) -> Vec<Vec<u8>> {
-        (0..self.num_attrs() as usize)
+    pub fn to_data(&self) -> Vec<u8> {
+        use storage::Storable;
+        let mut ret = (self.num_attrs() as u16).to_data();
+        ret.append(&mut (0..self.num_attrs() as usize)
             .map(|i| {
                 vec![
                     self.attr_types[i].to_data(),
@@ -51,6 +56,8 @@ impl TupleDesc {
                 .concat()
             })
             .collect::<Vec<_>>()
+            .concat());
+        ret
     }
 
     pub fn data_from_literal(

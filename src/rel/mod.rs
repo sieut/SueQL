@@ -1,10 +1,8 @@
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use db_state::DbState;
 use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
-use std::io::Cursor;
 use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
 use tuple::{TupleDesc, TuplePtr};
 use utils;
@@ -45,35 +43,14 @@ impl Rel {
             .get_buf(&BufKey::new(rel_id, 0, buf_type))?;
         let lock = buf_page.read().unwrap();
 
-        // The data should have at least num_attr, and attrs
-        assert!(lock.tuple_count() >= 2);
+        assert!(lock.tuple_count() == 1);
 
         let mut iter = lock.iter();
-        let num_attr = {
-            let data = iter.next().unwrap();
-            utils::assert_data_len(&data, 4)?;
-            let mut cursor = Cursor::new(&data);
-            cursor.read_u32::<LittleEndian>()?
-        };
-
-        let mut attr_data = vec![];
-        for _ in 0..num_attr {
-            match iter.next() {
-                Some(data) => {
-                    attr_data.push(data.to_vec());
-                }
-                None => {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "Missing attr types",
-                    ));
-                }
-            };
-        }
+        let tuple_desc = TupleDesc::from_data(iter.next().unwrap().to_vec())?;
 
         Ok(Rel {
             rel_id,
-            tuple_desc: TupleDesc::from_data(&attr_data)?,
+            tuple_desc,
             buf_type,
         })
     }
@@ -264,19 +241,7 @@ impl Rel {
         let _first_page = buf_mgr.new_buf(&key.inc_offset())?;
 
         let mut lock = meta_page.write().unwrap();
-        // Write num attrs
-        {
-            let mut data = vec![0u8; 4];
-            LittleEndian::write_u32(&mut data, rel.tuple_desc.num_attrs());
-            lock.write_tuple_data(&data, None, None)?;
-        }
-        // Write tuple desc
-        {
-            let attrs_data = rel.tuple_desc.to_data();
-            for tup in attrs_data.iter() {
-                lock.write_tuple_data(&tup, None, None)?;
-            }
-        }
+        lock.write_tuple_data(&rel.tuple_desc.to_data(), None, None)?;
         Ok(())
     }
 

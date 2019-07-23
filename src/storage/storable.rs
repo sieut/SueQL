@@ -45,5 +45,6 @@ macro_rules! storable_for_primitive {
     };
 }
 
+storable_for_primitive!(u16, read_u16, write_u16);
 storable_for_primitive!(u32, read_u32, write_u32);
 storable_for_primitive!(u64, read_u64, write_u64);

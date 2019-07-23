@@ -4,6 +4,7 @@ use self::num::FromPrimitive;
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use nom_sql::{Literal, SqlType};
 use std::io::Cursor;
+use storage::Storable;
 
 enum_from_primitive! {
     #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -18,37 +19,6 @@ enum_from_primitive! {
 }
 
 impl DataType {
-    pub fn from_data(data: &[u8]) -> Result<DataType, std::io::Error> {
-        use std::io::{Error, ErrorKind};
-
-        let mut cursor = Cursor::new(&data);
-        let id = cursor.read_u16::<LittleEndian>()?;
-        match DataType::from_u16(id) {
-            Some(t) => {
-                // NOTE: matching t because we might support
-                // types with argument in the future, eg. Char(len)
-                match t.clone() {
-                    _ => Ok(t),
-                }
-            }
-            None => Err(Error::new(ErrorKind::InvalidData, "Invalid type ID")),
-        }
-    }
-
-    pub fn to_data(&self) -> Vec<u8> {
-        let mut data = vec![0u8; 2];
-        let id = *self as u16;
-        LittleEndian::write_u16(&mut data, id);
-        // NOTE when types with argument are supported, update this fn
-        data
-    }
-
-    pub fn id_len(&self) -> usize {
-        match self {
-            _ => 2,
-        }
-    }
-
     pub fn from_nom_type(nom_type: SqlType) -> Option<DataType> {
         match nom_type {
             SqlType::Char(len) => {
@@ -230,6 +200,40 @@ impl DataType {
             }
             &DataType::VarChar => from_utf8(bytes[2..bytes.len()].to_vec()),
         }
+    }
+}
+
+impl Storable for DataType {
+    fn size() -> usize {
+        2
+    }
+
+    fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
+        use std::io::{Error, ErrorKind};
+
+        let mut cursor = Cursor::new(bytes);
+        let data_type = match DataType::from_u16(cursor.read_u16::<LittleEndian>()?) {
+            Some(t) => {
+                // NOTE: matching t because we might support
+                // types with argument in the future, eg. Char(len)
+                match t.clone() {
+                    _ => t,
+                }
+            }
+            None => {
+                return Err(Error::new(ErrorKind::InvalidData, "Invalid type ID"));
+            }
+        };
+        let leftover_data = Self::leftover_data(cursor);
+        Ok((data_type, leftover_data))
+    }
+
+    fn to_data(&self) -> Vec<u8> {
+        let mut data = vec![0u8; Self::size()];
+        let id = *self as u16;
+        LittleEndian::write_u16(&mut data, id);
+        // NOTE when types with argument are supported, update this fn
+        data
     }
 }
 
