@@ -127,12 +127,10 @@ impl BufPage {
                     ));
                 }
                 let new_ptr = match self.space_flag {
-                    SpaceFlag::Standard => {
-                        TuplePtr::new(
-                            self.buf_key.clone(),
-                            BufPage::ptr_to_offset(self.lower_ptr),
-                        )
-                    }
+                    SpaceFlag::Standard => TuplePtr::new(
+                        self.buf_key.clone(),
+                        BufPage::ptr_to_offset(self.lower_ptr),
+                    ),
                     SpaceFlag::Gaps => {
                         self.set_gap_count(self.gap_count - 1);
                         self.get_gap()
@@ -350,10 +348,7 @@ impl BufPage {
 
     fn set_gap_count(&mut self, count: u16) {
         self.gap_count = count;
-        LittleEndian::write_u16(
-            &mut self.buf[GAP_COUNT_RANGE],
-            self.gap_count,
-        );
+        LittleEndian::write_u16(&mut self.buf[GAP_COUNT_RANGE], self.gap_count);
 
         if self.gap_count == 0 {
             self.space_flag = SpaceFlag::Standard;

@@ -118,8 +118,7 @@ fn test_remove_and_write() {
     let mut buf_page = new_page();
     // Write some tuples
     buf_page.write_tuple_data(&[0u8; 1], None, None).unwrap();
-    let to_remove =
-        buf_page.write_tuple_data(&[1u8; 1], None, None).unwrap();
+    let to_remove = buf_page.write_tuple_data(&[1u8; 1], None, None).unwrap();
     buf_page.write_tuple_data(&[2u8; 1], None, None).unwrap();
 
     buf_page.remove_tuple(&to_remove, None).unwrap();

@@ -33,7 +33,10 @@ impl TupleDesc {
             let (attr_type, leftover) = DataType::from_data(data)?;
             let (name_len, mut leftover) = u16::from_data(leftover)?;
             // TODO update this unwrap
-            let attr_name = String::from_utf8(leftover.drain(..name_len as usize).collect::<Vec<_>>()).unwrap();
+            let attr_name = String::from_utf8(
+                leftover.drain(..name_len as usize).collect::<Vec<_>>(),
+            )
+            .unwrap();
             data = leftover;
             attr_types.push(attr_type);
             attr_names.push(attr_name);
@@ -45,18 +48,20 @@ impl TupleDesc {
     pub fn to_data(&self) -> Vec<u8> {
         use storage::Storable;
         let mut ret = (self.num_attrs() as u16).to_data();
-        ret.append(&mut (0..self.num_attrs() as usize)
-            .map(|i| {
-                vec![
-                    self.attr_types[i].to_data(),
-                    DataType::VarChar
-                        .string_to_data(&self.attr_names[i])
-                        .unwrap(),
-                ]
-                .concat()
-            })
-            .collect::<Vec<_>>()
-            .concat());
+        ret.append(
+            &mut (0..self.num_attrs() as usize)
+                .map(|i| {
+                    vec![
+                        self.attr_types[i].to_data(),
+                        DataType::VarChar
+                            .string_to_data(&self.attr_names[i])
+                            .unwrap(),
+                    ]
+                    .concat()
+                })
+                .collect::<Vec<_>>()
+                .concat(),
+        );
         ret
     }
 

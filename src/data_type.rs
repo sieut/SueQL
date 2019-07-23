@@ -212,18 +212,22 @@ impl Storable for DataType {
         use std::io::{Error, ErrorKind};
 
         let mut cursor = Cursor::new(bytes);
-        let data_type = match DataType::from_u16(cursor.read_u16::<LittleEndian>()?) {
-            Some(t) => {
-                // NOTE: matching t because we might support
-                // types with argument in the future, eg. Char(len)
-                match t.clone() {
-                    _ => t,
+        let data_type =
+            match DataType::from_u16(cursor.read_u16::<LittleEndian>()?) {
+                Some(t) => {
+                    // NOTE: matching t because we might support
+                    // types with argument in the future, eg. Char(len)
+                    match t.clone() {
+                        _ => t,
+                    }
                 }
-            }
-            None => {
-                return Err(Error::new(ErrorKind::InvalidData, "Invalid type ID"));
-            }
-        };
+                None => {
+                    return Err(Error::new(
+                        ErrorKind::InvalidData,
+                        "Invalid type ID",
+                    ));
+                }
+            };
         let leftover_data = Self::leftover_data(cursor);
         Ok((data_type, leftover_data))
     }
