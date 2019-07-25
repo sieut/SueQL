@@ -1,4 +1,5 @@
 use db_state::DbState;
+use error::Result;
 use exec::ExecNode;
 use internal_types::TupleData;
 use rel::Rel;
@@ -16,7 +17,7 @@ pub enum DataStore {
 }
 
 impl ExecNode for DataStore {
-    fn exec(&self, _db_state: &mut DbState) -> Result<(), std::io::Error> {
+    fn exec(&self, _db_state: &mut DbState) -> Result<()> {
         Ok(())
     }
 

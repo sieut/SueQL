@@ -1,5 +1,6 @@
 use data_type::DataType;
 use db_state::{DbSettings, DbState};
+use error::Result;
 use log::LogMgr;
 use meta::Meta;
 use rel::Rel;
@@ -65,7 +66,7 @@ fn test_write_tuple() {
 }
 
 #[test]
-fn test_rel_lock_macro() -> Result<(), std::io::Error> {
+fn test_rel_lock_macro() -> Result<()> {
     let data_dir = "test_rel_lock_macro";
     let mut db_state = setup(data_dir);
 

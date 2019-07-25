@@ -1,3 +1,4 @@
+use error::Result;
 use internal_types::ID;
 use log::{LogEntry, OpType};
 use std::sync::{Arc, RwLock};
@@ -17,21 +18,19 @@ pub struct LogMgr {
 }
 
 impl LogMgr {
-    pub fn create_and_load(
-        buf_mgr: &mut BufMgr,
-    ) -> Result<LogMgr, std::io::Error> {
+    pub fn create_and_load(buf_mgr: &mut BufMgr) -> Result<LogMgr> {
         use std::io::ErrorKind;
 
         match LogMgr::load(buf_mgr) {
             Ok(log_mgr) => Ok(log_mgr),
-            Err(e) => match e.kind() {
-                ErrorKind::NotFound => LogMgr::new(buf_mgr),
+            Err(e) => match e.io_kind() {
+                Some(ErrorKind::NotFound) => LogMgr::new(buf_mgr),
                 _ => panic!("Cannot create and load LogMgr\nError: {:?}", e),
             },
         }
     }
 
-    pub fn new(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
+    pub fn new(buf_mgr: &mut BufMgr) -> Result<LogMgr> {
         let meta_page = buf_mgr.new_buf(&LOG_META_KEY)?;
 
         // Save metadata of LogMgr
@@ -56,7 +55,7 @@ impl LogMgr {
         })
     }
 
-    pub fn load(buf_mgr: &mut BufMgr) -> Result<LogMgr, std::io::Error> {
+    pub fn load(buf_mgr: &mut BufMgr) -> Result<LogMgr> {
         use storage::PAGE_SIZE;
         use utils::file_len;
 
@@ -92,7 +91,7 @@ impl LogMgr {
         &mut self,
         entries: E,
         buf_mgr: &mut BufMgr,
-    ) -> Result<Vec<TuplePtr>, std::io::Error>
+    ) -> Result<Vec<TuplePtr>>
     where
         E: Into<std::collections::VecDeque<LogEntry>>,
     {
@@ -139,7 +138,7 @@ impl LogMgr {
     pub fn create_checkpoint(
         &mut self,
         buf_mgr: &mut BufMgr,
-    ) -> Result<TuplePtr, std::io::Error> {
+    ) -> Result<TuplePtr> {
         let need_cp = {
             let last_cp = self.last_cp.read().unwrap();
             let cur_key = self.cur_page_key.read().unwrap();
@@ -170,7 +169,7 @@ impl LogMgr {
         &mut self,
         pending_cp: TuplePtr,
         buf_mgr: &mut BufMgr,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<()> {
         if pending_cp == LogMgr::default_checkpoint() {
             return Ok(());
         }
@@ -202,7 +201,7 @@ impl LogMgr {
         Ok(())
     }
 
-    fn recover(&mut self, buf_mgr: &mut BufMgr) -> Result<(), std::io::Error> {
+    fn recover(&mut self, buf_mgr: &mut BufMgr) -> Result<()> {
         if !self.should_redo(buf_mgr)? {
             return Ok(());
         }
@@ -254,10 +253,7 @@ impl LogMgr {
         Ok(())
     }
 
-    fn should_redo(
-        &self,
-        buf_mgr: &mut BufMgr,
-    ) -> Result<bool, std::io::Error> {
+    fn should_redo(&self, buf_mgr: &mut BufMgr) -> Result<bool> {
         let key_guard = self.cur_page_key.read().unwrap();
         let cur_page = buf_mgr.get_buf(&key_guard)?;
         let page_guard = cur_page.write().unwrap();

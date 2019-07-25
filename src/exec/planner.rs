@@ -1,4 +1,5 @@
 use db_state::DbState;
+use error::Result;
 use exec::{DataStore, ExecNode};
 use nom_sql::{
     CreateTableStatement, FieldDefinitionExpression, InsertStatement,
@@ -12,7 +13,7 @@ use utils;
 
 pub fn plan_create(
     stmt: CreateTableStatement,
-) -> Result<Option<Box<ExecNode>>, std::io::Error> {
+) -> Result<Option<Box<ExecNode>>> {
     use exec::CreateTable;
     Ok(Some(Box::new(CreateTable::new(stmt))))
 }
@@ -20,7 +21,7 @@ pub fn plan_create(
 pub fn plan_insert(
     stmt: InsertStatement,
     db_state: &mut DbState,
-) -> Result<Option<Box<ExecNode>>, std::io::Error> {
+) -> Result<Option<Box<ExecNode>>> {
     use exec::Insert;
 
     let rel_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
@@ -38,7 +39,7 @@ pub fn plan_insert(
 pub fn plan_select(
     stmt: SelectStatement,
     db_state: &mut DbState,
-) -> Result<Option<Box<ExecNode>>, std::io::Error> {
+) -> Result<Option<Box<ExecNode>>> {
     use exec::Projection;
 
     let rel_id = match stmt.tables.len() {

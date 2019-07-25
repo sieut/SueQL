@@ -1,4 +1,5 @@
 use db_state::DbState;
+use error::Result;
 use exec::{DataStore, ExecNode};
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ impl Projection {
 }
 
 impl ExecNode for Projection {
-    fn exec(&self, db_state: &mut DbState) -> Result<(), std::io::Error> {
+    fn exec(&self, db_state: &mut DbState) -> Result<()> {
         self.src.exec(db_state)?;
 
         match (self.src.output(), self.output()) {

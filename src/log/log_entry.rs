@@ -1,16 +1,18 @@
 use db_state::DbState;
+use error::Result;
 use internal_types::TupleData;
 use log::{LogHeader, OpType};
+use serde::{Deserialize, Serialize};
 use storage::{BufKey, BufType, Storable};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogEntry {
     pub header: LogHeader,
     pub data: TupleData,
 }
 
 impl LogEntry {
-    pub fn load(bytes: TupleData) -> Result<LogEntry, std::io::Error> {
+    pub fn load(bytes: TupleData) -> Result<LogEntry> {
         let (header, data) = LogHeader::from_data(bytes)?;
         Ok(LogEntry { header, data })
     }
@@ -20,7 +22,7 @@ impl LogEntry {
         op: OpType,
         data: TupleData,
         db_state: &mut DbState,
-    ) -> Result<LogEntry, std::io::Error> {
+    ) -> Result<LogEntry> {
         let lsn = db_state.meta.get_new_lsn()?;
         let header = LogHeader::new(lsn, buf_key, op);
         Ok(LogEntry { header, data })

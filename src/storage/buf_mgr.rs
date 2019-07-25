@@ -1,4 +1,5 @@
 use db_state::DbSettings;
+use error::{Error, Result};
 use evmap;
 use internal_types::ID;
 use log::LogMgr;
@@ -126,10 +127,7 @@ impl BufMgr {
         }
     }
 
-    pub fn start_persist(
-        &self,
-        log_mgr: &LogMgr,
-    ) -> Result<(), std::io::Error> {
+    pub fn start_persist(&self, log_mgr: &LogMgr) -> Result<()> {
         let buf_mgr_clone = self.clone();
         let log_mgr_clone = log_mgr.clone();
         std::thread::spawn(move || {
@@ -142,8 +140,7 @@ impl BufMgr {
         self.buf_table_r.contains_key(key)
     }
 
-    pub fn get_buf(&mut self, key: &BufKey) -> Result<PageLock, io::Error> {
-        use std::io::{Error, ErrorKind};
+    pub fn get_buf(&mut self, key: &BufKey) -> Result<PageLock> {
         use storage::BufType;
 
         match &key.buf_type {
@@ -151,10 +148,9 @@ impl BufMgr {
             // They are not right now because if the buffer is evicted,
             // we will have to return an error, there is also no need to
             // share these between threads
-            &BufType::Mem => Err(Error::new(
-                ErrorKind::Other,
+            &BufType::Mem => Err(Error::Internal(String::from(
                 "In-memory buffers are not retrievable",
-            )),
+            ))),
             _ => {
                 let buf = match self.get_item(key) {
                     Some(buf) => buf,
@@ -173,7 +169,7 @@ impl BufMgr {
         &self,
         key: &BufKey,
         info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>,
-    ) -> Result<(), io::Error> {
+    ) -> Result<()> {
         use storage::BufType;
 
         match self.get_item(key) {
@@ -205,14 +201,11 @@ impl BufMgr {
                 info_lock.dirty = false;
                 Ok(())
             }
-            None => {
-                Err(io::Error::new(io::ErrorKind::NotFound, "Buffer not found"))
-            }
+            None => Err(Error::Internal(String::from("Buffer not found"))),
         }
     }
 
-    pub fn new_buf(&mut self, key: &BufKey) -> Result<PageLock, io::Error> {
-        use std::io::{Error, ErrorKind};
+    pub fn new_buf(&mut self, key: &BufKey) -> Result<PageLock> {
         use storage::BufType;
 
         match &key.buf_type {
@@ -224,10 +217,10 @@ impl BufMgr {
                 if key.byte_offset() == 0 {
                     // Check if the file already exists
                     if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
-                        Err(Error::new(
-                            ErrorKind::AlreadyExists,
+                        Err(Error::from(std::io::Error::new(
+                            std::io::ErrorKind::AlreadyExists,
                             "File already exists",
-                        ))
+                        )))
                     } else {
                         utils::create_file(&key.to_filename(self.data_dir()))?;
                         self.get_buf(key)
@@ -252,7 +245,7 @@ impl BufMgr {
         }
     }
 
-    pub fn new_mem_buf(&mut self) -> Result<PageLock, io::Error> {
+    pub fn new_mem_buf(&mut self) -> Result<PageLock> {
         use storage::BufType;
         let id = self.new_mem_id();
         self.new_buf(&BufKey::new(id, 0, BufType::Mem))
@@ -271,7 +264,7 @@ impl BufMgr {
         *mem_cnt
     }
 
-    fn read_buf(&self, key: &BufKey) -> Result<Vec<u8>, io::Error> {
+    fn read_buf(&self, key: &BufKey) -> Result<Vec<u8>> {
         let mut file = fs::File::open(key.to_filename(self.data_dir()))?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
@@ -280,11 +273,7 @@ impl BufMgr {
         Ok(buf.to_vec())
     }
 
-    fn add_buf(
-        &mut self,
-        buf: Vec<u8>,
-        key: &BufKey,
-    ) -> Result<PageLock, io::Error> {
+    fn add_buf(&mut self, buf: Vec<u8>, key: &BufKey) -> Result<PageLock> {
         let mut buf_w = self.buf_table_w.lock().unwrap();
         let mut evict_q = self.evict_queue.lock().unwrap();
 
@@ -377,16 +366,10 @@ impl BufMgr {
         }
     }
 
-    pub fn persist(&mut self) -> Result<(), std::io::Error> {
+    pub fn persist(&mut self) -> Result<()> {
         let keys = self.evict_queue.lock().unwrap().clone();
         for it in keys.iter() {
-            match self.store_buf(&*it, None) {
-                Ok(_) => {}
-                Err(e) => match e.kind() {
-                    io::ErrorKind::NotFound => {}
-                    _ => return Err(e),
-                },
-            }
+            self.store_buf(&*it, None)?;
         }
 
         Ok(())

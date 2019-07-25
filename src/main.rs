@@ -14,6 +14,7 @@ mod rel;
 
 mod data_type;
 mod db_state;
+mod error;
 mod exec;
 mod internal_types;
 mod log;

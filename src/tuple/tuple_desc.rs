@@ -1,4 +1,5 @@
 use data_type::DataType;
+use error::{Error, Result};
 use internal_types::TupleData;
 use nom_sql::Literal;
 
@@ -24,7 +25,7 @@ impl TupleDesc {
         }
     }
 
-    pub fn from_data(data: Vec<u8>) -> Result<TupleDesc, std::io::Error> {
+    pub fn from_data(data: Vec<u8>) -> Result<TupleDesc> {
         use storage::Storable;
         let (num_attrs, mut data) = u16::from_data(data)?;
         let mut attr_types = vec![];
@@ -129,7 +130,7 @@ impl TupleDesc {
         cols
     }
 
-    pub fn assert_data_len(&self, data: &[u8]) -> Result<(), std::io::Error> {
+    pub fn assert_data_len(&self, data: &[u8]) -> Result<()> {
         let mut sum = 0;
         for attr in self.attr_types.iter() {
             sum += match attr.data_size(Some(&data[sum..data.len()])) {
@@ -143,10 +144,10 @@ impl TupleDesc {
         if sum == data.len() {
             Ok(())
         } else {
-            Err(std::io::Error::new(
+            Err(Error::from(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Data doesn't match with tuple desc",
-            ))
+            )))
         }
     }
 

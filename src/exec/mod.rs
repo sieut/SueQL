@@ -12,12 +12,10 @@ pub use self::insert::Insert;
 pub use self::projection::Projection;
 
 use db_state::DbState;
+use error::Result;
 use nom_sql::SqlQuery;
 
-pub fn exec(
-    query: SqlQuery,
-    db_state: &mut DbState,
-) -> Result<(), std::io::Error> {
+pub fn exec(query: SqlQuery, db_state: &mut DbState) -> Result<()> {
     match query {
         SqlQuery::CreateTable(stmt) => match planner::plan_create(stmt)? {
             Some(node) => node.exec(db_state),

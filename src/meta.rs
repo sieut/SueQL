@@ -1,6 +1,7 @@
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use data_type::DataType;
 use db_state::State;
+use error::Result;
 use internal_types::{ID, LSN};
 use rel::Rel;
 use std::io::Cursor;
@@ -25,21 +26,19 @@ pub struct Meta {
 }
 
 impl Meta {
-    pub fn create_and_load(
-        buf_mgr: &mut BufMgr,
-    ) -> Result<Meta, std::io::Error> {
+    pub fn create_and_load(buf_mgr: &mut BufMgr) -> Result<Meta> {
         use std::io::ErrorKind;
 
         match Meta::load(buf_mgr) {
             Ok(meta) => Ok(meta),
-            Err(e) => match e.kind() {
-                ErrorKind::NotFound => Meta::new(buf_mgr),
+            Err(e) => match e.io_kind() {
+                Some(ErrorKind::NotFound) => Meta::new(buf_mgr),
                 _ => panic!("Cannot create_and_load meta\n Error: {:?}", e),
             },
         }
     }
 
-    pub fn load(buf_mgr: &mut BufMgr) -> Result<Meta, std::io::Error> {
+    pub fn load(buf_mgr: &mut BufMgr) -> Result<Meta> {
         let buf = buf_mgr.get_buf(&META_BUF_KEY)?;
         let lock = buf.read().unwrap();
 
@@ -52,7 +51,7 @@ impl Meta {
         Ok(Meta { buf: buf.clone() })
     }
 
-    pub fn new(buf_mgr: &mut BufMgr) -> Result<Meta, std::io::Error> {
+    pub fn new(buf_mgr: &mut BufMgr) -> Result<Meta> {
         let buf = buf_mgr.new_buf(&META_BUF_KEY)?;
         let mut guard = buf.write().unwrap();
         // State
@@ -68,22 +67,22 @@ impl Meta {
         Ok(Meta { buf: buf.clone() })
     }
 
-    pub fn set_state(&self, state: State) -> Result<(), std::io::Error> {
+    pub fn set_state(&self, state: State) -> Result<()> {
         let mut guard = self.buf.write().unwrap();
         let data: Vec<u8> = state.into();
         guard.write_tuple_data(&data, Some(&STATE_PTR), None)?;
         Ok(())
     }
 
-    pub fn get_new_id(&self) -> Result<ID, std::io::Error> {
+    pub fn get_new_id(&self) -> Result<ID> {
         self.inc_counter(&CUR_ID_PTR)
     }
 
-    pub fn get_new_lsn(&self) -> Result<LSN, std::io::Error> {
+    pub fn get_new_lsn(&self) -> Result<LSN> {
         self.inc_counter(&CUR_LSN_PTR)
     }
 
-    fn inc_counter(&self, ptr: &TuplePtr) -> Result<u32, std::io::Error> {
+    fn inc_counter(&self, ptr: &TuplePtr) -> Result<u32> {
         let mut lock = self.buf.write().unwrap();
 
         let cur_val = Cursor::new(&lock.get_tuple_data(ptr)?)

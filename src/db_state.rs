@@ -1,6 +1,7 @@
 extern crate num;
 use self::num::FromPrimitive;
 
+use error::{Error, Result};
 use log::LogMgr;
 use meta::Meta;
 use storage::BufMgr;
@@ -14,7 +15,7 @@ pub struct DbState {
 }
 
 impl DbState {
-    pub fn start_db(settings: DbSettings) -> Result<DbState, std::io::Error> {
+    pub fn start_db(settings: DbSettings) -> Result<DbState> {
         let data_dir = settings.clone().data_dir.unwrap_or("data".to_string());
         DbState::create_data_dir(data_dir)?;
 
@@ -34,7 +35,7 @@ impl DbState {
         })
     }
 
-    pub fn shutdown(&mut self) -> Result<(), std::io::Error> {
+    pub fn shutdown(&mut self) -> Result<()> {
         // Set state on disk to down
         self.meta.set_state(State::Down)?;
         // Persist one last time
@@ -43,9 +44,7 @@ impl DbState {
         Ok(())
     }
 
-    fn create_data_dir<S: Into<String>>(
-        data_dir: S,
-    ) -> Result<(), std::io::Error> {
+    fn create_data_dir<S: Into<String>>(data_dir: S) -> Result<()> {
         use std::fs::create_dir;
         use std::io::ErrorKind;
 
@@ -56,7 +55,7 @@ impl DbState {
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => {}
                 _ => {
-                    return Err(e);
+                    return Err(Error::from(e));
                 }
             },
         };
@@ -65,7 +64,7 @@ impl DbState {
             Err(e) => match e.kind() {
                 ErrorKind::AlreadyExists => {}
                 _ => {
-                    return Err(e);
+                    return Err(Error::from(e));
                 }
             },
         };

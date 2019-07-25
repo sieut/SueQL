@@ -1,4 +1,5 @@
 use db_state::DbState;
+use error::Result;
 use exec::{DataStore, ExecNode};
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ impl Insert {
 }
 
 impl ExecNode for Insert {
-    fn exec(&self, db_state: &mut DbState) -> Result<(), std::io::Error> {
+    fn exec(&self, db_state: &mut DbState) -> Result<()> {
         match (self.data.output(), self.output()) {
             (DataStore::Data { tuples, desc }, DataStore::Rel(rel)) => {
                 assert_eq!(desc.attr_types(), rel.tuple_desc().attr_types());

@@ -1,4 +1,5 @@
 use db_state::DbState;
+use error::Result;
 use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
@@ -23,7 +24,6 @@ macro_rules! rel_write_lock {
     };
 }
 
-
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
 #[derive(Clone, Debug)]
@@ -38,7 +38,7 @@ impl Rel {
         rel_id: ID,
         buf_type: BufType,
         db_state: &mut DbState,
-    ) -> Result<Rel, std::io::Error> {
+    ) -> Result<Rel> {
         let buf_page = db_state
             .buf_mgr
             .get_buf(&BufKey::new(rel_id, 0, buf_type))?;
@@ -62,7 +62,7 @@ impl Rel {
         name: S,
         tuple_desc: TupleDesc,
         db_state: &mut DbState,
-    ) -> Result<Rel, std::io::Error> {
+    ) -> Result<Rel> {
         let rel_id = db_state.meta.get_new_id()?;
         let rel = Rel {
             rel_id,
@@ -84,7 +84,7 @@ impl Rel {
     pub fn new_temp_rel(
         tuple_desc: TupleDesc,
         db_state: &mut DbState,
-    ) -> Result<Rel, std::io::Error> {
+    ) -> Result<Rel> {
         let rel_id = db_state.buf_mgr.new_temp_id();
         let rel = Rel {
             rel_id,
@@ -100,7 +100,7 @@ impl Rel {
         rel_id: ID,
         tuple_desc: TupleDesc,
         buf_mgr: &mut BufMgr,
-    ) -> Result<Rel, std::io::Error> {
+    ) -> Result<Rel> {
         let rel = Rel {
             rel_id,
             tuple_desc,
@@ -114,7 +114,7 @@ impl Rel {
         &self,
         mut tuples: Vec<TupleData>,
         db_state: &mut DbState,
-    ) -> Result<Vec<TuplePtr>, std::io::Error> {
+    ) -> Result<Vec<TuplePtr>> {
         for tup in tuples.iter() {
             self.tuple_desc.assert_data_len(&tup)?;
         }
@@ -163,7 +163,7 @@ impl Rel {
         &self,
         page: &BufPage,
         db_state: &mut DbState,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<()> {
         let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
         let new_page = db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
         let mut page_guard = new_page.write().unwrap();
@@ -176,7 +176,7 @@ impl Rel {
         buf_key: BufKey,
         data: Vec<u8>,
         db_state: &mut DbState,
-    ) -> Result<LSN, std::io::Error> {
+    ) -> Result<LSN> {
         let entry =
             LogEntry::new(buf_key, OpType::InsertTuple, data, db_state)?;
         let lsn = entry.header.lsn;
@@ -191,7 +191,7 @@ impl Rel {
         db_state: &mut DbState,
         filter: Filter,
         mut then: Then,
-    ) -> Result<(), std::io::Error>
+    ) -> Result<()>
     where
         Filter: Fn(&[u8]) -> bool,
         Then: FnMut(&[u8], &mut DbState),
@@ -232,10 +232,7 @@ impl Rel {
         self.tuple_desc.clone()
     }
 
-    fn write_new_rel(
-        buf_mgr: &mut BufMgr,
-        rel: &Rel,
-    ) -> Result<(), std::io::Error> {
+    fn write_new_rel(buf_mgr: &mut BufMgr, rel: &Rel) -> Result<()> {
         // Create new data file
         let key = rel.meta_buf_key();
         let meta_page = buf_mgr.new_buf(&key)?;
@@ -250,10 +247,7 @@ impl Rel {
         BufKey::new(self.rel_id, 0, self.buf_type)
     }
 
-    fn last_buf_key(
-        &self,
-        buf_mgr: &mut BufMgr,
-    ) -> Result<BufKey, std::io::Error> {
+    fn last_buf_key(&self, buf_mgr: &mut BufMgr) -> Result<BufKey> {
         Ok(BufKey::new(
             self.rel_id,
             self.num_pages(buf_mgr)? as u64,

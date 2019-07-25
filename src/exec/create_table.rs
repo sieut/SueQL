@@ -1,5 +1,6 @@
 use data_type::DataType;
 use db_state::DbState;
+use error::Result;
 use exec::{DataStore, ExecNode};
 use nom_sql::CreateTableStatement;
 use rel::Rel;
@@ -17,7 +18,7 @@ impl CreateTable {
 }
 
 impl ExecNode for CreateTable {
-    fn exec(&self, db_state: &mut DbState) -> Result<(), std::io::Error> {
+    fn exec(&self, db_state: &mut DbState) -> Result<()> {
         let attr_types: Vec<DataType> = self
             .stmt
             .fields

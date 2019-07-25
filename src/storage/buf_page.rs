@@ -3,6 +3,7 @@ extern crate num;
 use byteorder::ByteOrder;
 use byteorder::{LittleEndian, ReadBytesExt};
 use enum_primitive::FromPrimitive;
+use error::{Error, Result};
 use internal_types::LSN;
 use std::io::Cursor;
 use std::iter::Iterator;
@@ -47,12 +48,7 @@ impl BufPage {
         vec
     }
 
-    pub fn load_from(
-        buffer: &[u8],
-        buf_key: &BufKey,
-    ) -> Result<BufPage, std::io::Error> {
-        use std::io::{Error, ErrorKind};
-
+    pub fn load_from(buffer: &[u8], buf_key: &BufKey) -> Result<BufPage> {
         assert_eq!(buffer.len(), PAGE_SIZE);
         let mut reader = Cursor::new(&buffer[0..HEADER_SIZE]);
         let lsn = reader.read_u32::<LittleEndian>()?;
@@ -61,12 +57,7 @@ impl BufPage {
         let space_flag =
             match SpaceFlag::from_u16(reader.read_u16::<LittleEndian>()?) {
                 Some(flag) => flag,
-                None => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidInput,
-                        "Undefined flag",
-                    ))
-                }
+                None => return Err(Error::CorruptedData),
             };
         let gap_count = reader.read_u16::<LittleEndian>()?;
 
@@ -106,7 +97,7 @@ impl BufPage {
         tuple_data: &[u8],
         tuple_ptr: Option<&TuplePtr>,
         lsn: Option<LSN>,
-    ) -> Result<TuplePtr, std::io::Error> {
+    ) -> Result<TuplePtr> {
         let (ret, page_ptr) = match tuple_ptr {
             Some(ptr) => {
                 self.is_valid_tuple_ptr(ptr)?;
@@ -120,11 +111,9 @@ impl BufPage {
             }
             None => {
                 if self.available_data_space() < tuple_data.len() {
-                    use std::io::{Error, ErrorKind};
-                    return Err(Error::new(
-                        ErrorKind::Other,
+                    return Err(Error::Internal(String::from(
                         "Not enough space for tuple",
-                    ));
+                    )));
                 }
                 let new_ptr = match self.space_flag {
                     SpaceFlag::Standard => TuplePtr::new(
@@ -153,10 +142,7 @@ impl BufPage {
         Ok(ret)
     }
 
-    pub fn get_tuple_data(
-        &self,
-        tuple_ptr: &TuplePtr,
-    ) -> Result<&[u8], std::io::Error> {
+    pub fn get_tuple_data(&self, tuple_ptr: &TuplePtr) -> Result<&[u8]> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
         let (start, end) = self.get_tuple_range(tuple_ptr)?;
         Ok(&self.buf[start..end])
@@ -169,7 +155,7 @@ impl BufPage {
         &mut self,
         tuple_ptr: &TuplePtr,
         lsn: Option<LSN>,
-    ) -> Result<(), std::io::Error> {
+    ) -> Result<()> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
         let last_ptr = self.get_last_tuple_ptr();
         let (start, end) = self.get_tuple_range(tuple_ptr)?;
@@ -216,10 +202,7 @@ impl BufPage {
         Ok(())
     }
 
-    pub fn next_ptr(
-        &self,
-        mut tuple_ptr: TuplePtr,
-    ) -> Result<TuplePtr, std::io::Error> {
+    pub fn next_ptr(&self, mut tuple_ptr: TuplePtr) -> Result<TuplePtr> {
         self.is_valid_tuple_ptr(&tuple_ptr)?;
         loop {
             tuple_ptr.buf_offset += 1;
@@ -257,29 +240,20 @@ impl BufPage {
         (self.lower_ptr - HEADER_SIZE) / 4 - self.gap_count as usize
     }
 
-    fn is_valid_tuple_ptr(
-        &self,
-        tuple_ptr: &TuplePtr,
-    ) -> Result<(), std::io::Error> {
+    fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr) -> Result<()> {
         if self.buf_key != tuple_ptr.buf_key {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Invalid buf_key",
-            ))
+            Err(Error::Internal(String::from("Invalid buf_key")))
         } else if tuple_ptr.buf_offset > self.get_last_tuple_ptr().buf_offset {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("Invalid buf_offset {}", tuple_ptr.buf_offset),
-            ))
+            Err(Error::Internal(String::from(format!(
+                "Invalid buf_offset {}",
+                tuple_ptr.buf_offset
+            ))))
         } else {
             Ok(())
         }
     }
 
-    fn get_tuple_len(
-        &self,
-        tuple_ptr: &TuplePtr,
-    ) -> Result<usize, std::io::Error> {
+    fn get_tuple_len(&self, tuple_ptr: &TuplePtr) -> Result<usize> {
         let (start, end) = self.get_tuple_range(tuple_ptr)?;
         Ok(end - start)
     }
@@ -297,7 +271,7 @@ impl BufPage {
     fn get_tuple_range(
         &self,
         tuple_ptr: &TuplePtr,
-    ) -> Result<(PagePtr, PagePtr), std::io::Error> {
+    ) -> Result<(PagePtr, PagePtr)> {
         let mut reader = Cursor::new(
             &self.buf[BufPage::offset_to_ptr(tuple_ptr.buf_offset)
                 ..BufPage::offset_to_ptr(tuple_ptr.buf_offset + 1)],
