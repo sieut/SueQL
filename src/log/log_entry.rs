@@ -3,7 +3,7 @@ use error::Result;
 use internal_types::TupleData;
 use log::{LogHeader, OpType};
 use serde::{Deserialize, Serialize};
-use storage::{BufKey, BufType, Storable};
+use storage::{BufKey, BufType};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LogEntry {
@@ -12,11 +12,6 @@ pub struct LogEntry {
 }
 
 impl LogEntry {
-    pub fn load(bytes: TupleData) -> Result<LogEntry> {
-        let (header, data) = LogHeader::from_data(bytes)?;
-        Ok(LogEntry { header, data })
-    }
-
     pub fn new(
         buf_key: BufKey,
         op: OpType,
@@ -50,16 +45,5 @@ impl LogEntry {
             header,
             data: vec![],
         }
-    }
-
-    pub fn size(&self) -> usize {
-        LogHeader::size() + self.data.len()
-    }
-
-    pub fn to_data(&self) -> TupleData {
-        let mut data = vec![];
-        data.append(&mut self.header.to_data());
-        data.append(&mut self.data.clone());
-        data
     }
 }

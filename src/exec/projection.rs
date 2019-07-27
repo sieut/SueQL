@@ -33,7 +33,8 @@ impl ExecNode for Projection {
                     db_state,
                     |_| true,
                     |data, db_state| {
-                        let cols = input.tuple_desc().cols(data);
+                        // TODO handle the unwraps
+                        let cols = input.tuple_desc().cols(data).unwrap();
                         let cols: Vec<Vec<u8>> = self
                             .indices
                             .iter()
@@ -41,7 +42,6 @@ impl ExecNode for Projection {
                             .collect();
                         let projected = cols.concat();
 
-                        // TODO handle the unwraps
                         if buf_guard.available_data_space() < projected.len() {
                             output.append_page(&buf_guard, db_state).unwrap();
                             buf_guard.clear();

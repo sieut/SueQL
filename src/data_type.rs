@@ -1,21 +1,16 @@
-extern crate num;
-use self::num::FromPrimitive;
-
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+use bincode;
+use error::{Error, Result};
 use nom_sql::{Literal, SqlType};
-use std::io::Cursor;
-use storage::Storable;
+use serde::{Deserialize, Serialize};
 
-enum_from_primitive! {
-    #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-    pub enum DataType {
-        Char,
-        U32,
-        I32,
-        U64,
-        I64,
-        VarChar,
-    }
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DataType {
+    Char,
+    U32,
+    I32,
+    U64,
+    I64,
+    VarChar,
 }
 
 impl DataType {
@@ -54,196 +49,104 @@ impl DataType {
         }
     }
 
-    pub fn data_from_literal(&self, input: &Literal) -> Option<Vec<u8>> {
+    pub fn literal_to_data(&self, input: &Literal) -> Result<Vec<u8>> {
         if !self.match_literal(input) {
-            return None;
+            return Err(Error::Internal(String::from("Unmatched data type")));
         }
 
-        let data_size = self.data_size(None);
-        match self {
-            &DataType::Char => {
-                if let &Literal::String(ref string) = input {
-                    Some(string.as_bytes().to_vec())
-                } else {
-                    None
-                }
+        match (self, input) {
+            (&DataType::Char, &Literal::String(ref string)) => {
+                Ok(string.as_bytes().to_vec())
             }
-            &DataType::I32 | &DataType::I64 => {
-                if let &Literal::Integer(int) = input {
-                    let n_bytes = data_size.unwrap();
-                    let mut bytes = vec![0u8; n_bytes];
-                    LittleEndian::write_int(&mut bytes, int, n_bytes);
-                    Some(bytes)
-                } else {
-                    None
-                }
+            (&DataType::VarChar, &Literal::String(ref string)) => {
+                Ok(bincode::serialize(&string)?)
             }
-            &DataType::U32 | &DataType::U64 => {
-                if let &Literal::Integer(int) = input {
-                    let n_bytes = data_size.unwrap();
-                    let mut bytes = vec![0u8; n_bytes];
-                    LittleEndian::write_uint(&mut bytes, int as u64, n_bytes);
-                    Some(bytes)
-                } else {
-                    None
-                }
+            (&DataType::I32, &Literal::Integer(int)) => {
+                Ok(bincode::serialize(&(int as i32))?)
             }
-            &DataType::VarChar => {
-                if let &Literal::String(ref string) = input {
-                    let mut bytes = vec![0u8; 2];
-                    LittleEndian::write_u16(&mut bytes, string.len() as u16);
-                    bytes.append(&mut string.as_bytes().to_vec());
-                    Some(bytes)
-                } else {
-                    None
-                }
+            (&DataType::U32, &Literal::Integer(int)) => {
+                Ok(bincode::serialize(&(int as u32))?)
+            }
+            (&DataType::I64, &Literal::Integer(int)) => {
+                Ok(bincode::serialize(&(int as i64))?)
+            }
+            (&DataType::U64, &Literal::Integer(int)) => {
+                Ok(bincode::serialize(&(int as u64))?)
+            }
+            _ => Err(Error::Internal(String::from("Unmatched data type"))),
+        }
+    }
+
+    pub fn data_size(&self, bytes: Option<&[u8]>) -> Result<usize> {
+        match (self, bytes) {
+            (&DataType::Char, _) => Ok(1),
+            (&DataType::U32, _) | (&DataType::I32, _) => Ok(4),
+            (&DataType::U64, _) | (&DataType::I64, _) => Ok(8),
+            (&DataType::VarChar, Some(bytes)) => {
+                let string: String = bincode::deserialize(bytes)?;
+                Ok(bincode::serialized_size(&string)? as usize)
+            }
+            _ => {
+                Err(Error::Internal(String::from("Cannot determine data_size")))
             }
         }
     }
 
-    pub fn data_size(&self, bytes: Option<&[u8]>) -> Option<usize> {
+    pub fn string_to_data(&self, input: &str) -> Result<Vec<u8>> {
         match self {
-            &DataType::Char => Some(1),
-            &DataType::U32 | &DataType::I32 => Some(4),
-            &DataType::U64 | &DataType::I64 => Some(8),
-            &DataType::VarChar => match bytes {
-                Some(bytes) => {
-                    if bytes.len() >= 2 {
-                        let mut cursor = Cursor::new(bytes);
-                        Some(
-                            (cursor.read_u16::<LittleEndian>().unwrap() + 2)
-                                as usize,
-                        )
-                    } else {
-                        None
-                    }
-                }
-                None => None,
+            &DataType::Char => match input.len() {
+                1 => Ok(input.as_bytes().to_vec()),
+                _ => Err(Error::Internal(String::from("Unmatched data type"))),
             },
-        }
-    }
-
-    pub fn string_to_data(&self, input: &str) -> Option<Vec<u8>> {
-        match self {
-            &DataType::Char => {
-                if input.len() == 1 {
-                    Some(input.as_bytes().to_vec())
-                } else {
-                    None
-                }
-            }
             &DataType::U32 => match input.parse::<u32>() {
-                Ok(int) => {
-                    let mut bytes = vec![0u8; 4];
-                    LittleEndian::write_u32(&mut bytes, int);
-                    Some(bytes)
+                Ok(int) => Ok(bincode::serialize(&int)?),
+                Err(_) => {
+                    Err(Error::Internal(format!("Failed to parse {}", input)))
                 }
-                Err(_) => None,
             },
             &DataType::I32 => match input.parse::<i32>() {
-                Ok(int) => {
-                    let mut bytes = vec![0u8; 4];
-                    LittleEndian::write_i32(&mut bytes, int);
-                    Some(bytes)
+                Ok(int) => Ok(bincode::serialize(&int)?),
+                Err(_) => {
+                    Err(Error::Internal(format!("Failed to parse {}", input)))
                 }
-                Err(_) => None,
             },
             &DataType::U64 => match input.parse::<u64>() {
-                Ok(int) => {
-                    let mut bytes = vec![0u8; 8];
-                    LittleEndian::write_u64(&mut bytes, int);
-                    Some(bytes)
+                Ok(int) => Ok(bincode::serialize(&int)?),
+                Err(_) => {
+                    Err(Error::Internal(format!("Failed to parse {}", input)))
                 }
-                Err(_) => None,
             },
             &DataType::I64 => match input.parse::<i64>() {
-                Ok(int) => {
-                    let mut bytes = vec![0u8; 8];
-                    LittleEndian::write_i64(&mut bytes, int);
-                    Some(bytes)
+                Ok(int) => Ok(bincode::serialize(&int)?),
+                Err(_) => {
+                    Err(Error::Internal(format!("Failed to parse {}", input)))
                 }
-                Err(_) => None,
             },
-            &DataType::VarChar => {
-                let mut bytes = vec![0u8; 2];
-                LittleEndian::write_u16(&mut bytes, input.len() as u16);
-                bytes.append(&mut input.as_bytes().to_vec());
-                Some(bytes)
-            }
+            &DataType::VarChar => Ok(bincode::serialize(input)?),
         }
     }
 
-    pub fn data_to_string(&self, bytes: &[u8]) -> Option<String> {
-        if bytes.len() == 0
-            || bytes.len() != self.data_size(Some(bytes)).unwrap_or(0)
-        {
-            return None;
-        }
-
+    pub fn data_to_string(&self, bytes: &[u8]) -> Result<String> {
         match self {
-            &DataType::Char => from_utf8(bytes.to_vec()),
+            &DataType::Char => match String::from_utf8(bytes.to_vec()) {
+                Ok(string) => Ok(string),
+                Err(_) => {
+                    Err(Error::Internal(String::from("Failed to parse data")))
+                }
+            },
             &DataType::U32 => {
-                let mut cursor = Cursor::new(bytes);
-                Some(cursor.read_u32::<LittleEndian>().unwrap().to_string())
+                Ok(bincode::deserialize::<u32>(bytes)?.to_string())
             }
             &DataType::I32 => {
-                let mut cursor = Cursor::new(bytes);
-                Some(cursor.read_i32::<LittleEndian>().unwrap().to_string())
+                Ok(bincode::deserialize::<i32>(bytes)?.to_string())
             }
             &DataType::U64 => {
-                let mut cursor = Cursor::new(bytes);
-                Some(cursor.read_u64::<LittleEndian>().unwrap().to_string())
+                Ok(bincode::deserialize::<u64>(bytes)?.to_string())
             }
             &DataType::I64 => {
-                let mut cursor = Cursor::new(bytes);
-                Some(cursor.read_i64::<LittleEndian>().unwrap().to_string())
+                Ok(bincode::deserialize::<i64>(bytes)?.to_string())
             }
-            &DataType::VarChar => from_utf8(bytes[2..bytes.len()].to_vec()),
+            &DataType::VarChar => Ok(bincode::deserialize::<String>(bytes)?),
         }
-    }
-}
-
-impl Storable for DataType {
-    fn size() -> usize {
-        2
-    }
-
-    fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
-        use std::io::{Error, ErrorKind};
-
-        let mut cursor = Cursor::new(bytes);
-        let data_type =
-            match DataType::from_u16(cursor.read_u16::<LittleEndian>()?) {
-                Some(t) => {
-                    // NOTE: matching t because we might support
-                    // types with argument in the future, eg. Char(len)
-                    match t.clone() {
-                        _ => t,
-                    }
-                }
-                None => {
-                    return Err(Error::new(
-                        ErrorKind::InvalidData,
-                        "Invalid type ID",
-                    ));
-                }
-            };
-        let leftover_data = Self::leftover_data(cursor);
-        Ok((data_type, leftover_data))
-    }
-
-    fn to_data(&self) -> Vec<u8> {
-        let mut data = vec![0u8; Self::size()];
-        let id = *self as u16;
-        LittleEndian::write_u16(&mut data, id);
-        // NOTE when types with argument are supported, update this fn
-        data
-    }
-}
-
-fn from_utf8(bytes: Vec<u8>) -> Option<String> {
-    match String::from_utf8(bytes) {
-        Ok(string) => Some(string),
-        Err(_) => None,
     }
 }

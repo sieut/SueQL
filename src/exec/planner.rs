@@ -26,7 +26,7 @@ pub fn plan_insert(
 
     let rel_id = utils::get_table_id(stmt.table.name.clone(), db_state)?;
     let rel = Rel::load(rel_id, BufType::Data, db_state)?;
-    let tuples = rel.data_from_literal(stmt.data.clone());
+    let tuples = rel.literal_to_data(stmt.data.clone())?;
     Ok(Some(Box::new(Insert::new(
         Arc::new(DataStore::Data {
             tuples,

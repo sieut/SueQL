@@ -1,9 +1,10 @@
+use bincode;
 use error::Result;
 use internal_types::ID;
 use log::{LogEntry, OpType};
 use std::sync::{Arc, RwLock};
 use storage::buf_mgr::PageLock;
-use storage::{BufKey, BufMgr, BufType, Storable};
+use storage::{BufKey, BufMgr, BufType};
 use tuple::TuplePtr;
 
 pub static LOG_REL_ID: ID = 2;
@@ -37,7 +38,7 @@ impl LogMgr {
         {
             let mut meta_guard = meta_page.write().unwrap();
             meta_guard.write_tuple_data(
-                &LogMgr::default_checkpoint().to_data(),
+                &bincode::serialize(&LogMgr::default_checkpoint())?,
                 None,
                 None,
             )?;
@@ -60,14 +61,11 @@ impl LogMgr {
         use utils::file_len;
 
         let meta_page = buf_mgr.get_buf(&LOG_META_KEY)?;
-        let last_cp_data;
-        // Load LogMgr metadata
-        {
+        let last_cp: TuplePtr = {
             let meta_guard = meta_page.read().unwrap();
-            last_cp_data = meta_guard.get_tuple_data(&LAST_CP_PTR)?.to_vec();
-        }
-        let (last_cp, last_cp_data) = TuplePtr::from_data(last_cp_data)?;
-        assert_eq!(last_cp_data.len(), 0);
+            let data = meta_guard.get_tuple_data(&LAST_CP_PTR)?;
+            bincode::deserialize(data)?
+        };
 
         let log_file_len =
             file_len(&LOG_META_KEY.to_filename(buf_mgr.data_dir()))?;
@@ -112,13 +110,15 @@ impl LogMgr {
             loop {
                 match entries.pop_front() {
                     Some(entry) => {
-                        if page_guard.available_data_space() < entry.size() {
+                        if (page_guard.available_data_space() as u64)
+                            < bincode::serialized_size(&entry)?
+                        {
                             key_guard.offset += 1;
                             entries.push_front(entry);
                             break;
                         } else {
                             ret.push(page_guard.write_tuple_data(
-                                &entry.to_data(),
+                                &bincode::serialize(&entry)?,
                                 None,
                                 None,
                             )?);
@@ -183,12 +183,12 @@ impl LogMgr {
             let cp_entry = LogEntry::new_cp();
             // NOTE when update tuple in BufPage is implemented, change this
             log_guard.write_tuple_data(
-                &pending_cp.to_data(),
+                &bincode::serialize(&pending_cp)?,
                 Some(&LAST_CP_PTR),
                 None,
             )?;
             page_guard.write_tuple_data(
-                &cp_entry.to_data(),
+                &bincode::serialize(&cp_entry)?,
                 Some(&pending_cp),
                 None,
             )?;
@@ -216,7 +216,7 @@ impl LogMgr {
             let page_guard = log_page.read().unwrap();
 
             for data in page_guard.iter().skip(skip) {
-                let entry = LogEntry::load(data.to_vec())?;
+                let entry: LogEntry = bincode::deserialize(data)?;
                 let buf = buf_mgr.get_buf(&entry.header.buf_key)?;
                 let mut buf_guard = buf.write().unwrap();
 
@@ -260,9 +260,8 @@ impl LogMgr {
 
         let last_entry_ptr =
             TuplePtr::new(*key_guard, page_guard.tuple_count() - 1);
-        let last_entry = LogEntry::load(
-            page_guard.get_tuple_data(&last_entry_ptr)?.to_vec(),
-        )?;
+        let last_entry: LogEntry =
+            bincode::deserialize(page_guard.get_tuple_data(&last_entry_ptr)?)?;
 
         match last_entry.header.op {
             OpType::Checkpoint => Ok(false),

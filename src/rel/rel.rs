@@ -1,5 +1,7 @@
+use bincode;
 use db_state::DbState;
 use error::Result;
+use index::IndexType;
 use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
@@ -47,7 +49,7 @@ impl Rel {
         assert!(lock.tuple_count() == 1);
 
         let mut iter = lock.iter();
-        let tuple_desc = TupleDesc::from_data(iter.next().unwrap().to_vec())?;
+        let tuple_desc: TupleDesc = bincode::deserialize(iter.next().unwrap())?;
 
         Ok(Rel {
             rel_id,
@@ -220,12 +222,15 @@ impl Rel {
         &self,
         data: &[u8],
         filter_indices: Option<Vec<usize>>,
-    ) -> Option<Vec<String>> {
+    ) -> Result<Vec<String>> {
         self.tuple_desc.data_to_strings(data, filter_indices)
     }
 
-    pub fn data_from_literal(&self, inputs: Vec<Vec<Literal>>) -> Vec<Vec<u8>> {
-        self.tuple_desc.data_from_literal(inputs)
+    pub fn literal_to_data(
+        &self,
+        inputs: Vec<Vec<Literal>>,
+    ) -> Result<Vec<Vec<u8>>> {
+        self.tuple_desc.literal_to_data(inputs)
     }
 
     pub fn tuple_desc(&self) -> TupleDesc {
@@ -239,7 +244,11 @@ impl Rel {
         let _first_page = buf_mgr.new_buf(&key.inc_offset())?;
 
         let mut lock = meta_page.write().unwrap();
-        lock.write_tuple_data(&rel.tuple_desc.to_data(), None, None)?;
+        lock.write_tuple_data(
+            &bincode::serialize(&rel.tuple_desc)?,
+            None,
+            None,
+        )?;
         Ok(())
     }
 
@@ -256,8 +265,15 @@ impl Rel {
     }
 
     //TODO Compare between saving num_pages in 1st page and getting file len
-    fn num_pages(&self, buf_mgr: &mut BufMgr) -> Result<u64, std::io::Error> {
+    fn num_pages(&self, buf_mgr: &mut BufMgr) -> Result<u64> {
         let rel_filename = buf_mgr.key_to_filename(self.meta_buf_key());
         Ok(utils::file_len(&rel_filename)? / PAGE_SIZE as u64 - 1)
     }
 }
+
+struct IndexInfo {
+    key: Vec<usize>,
+    index: IndexType,
+}
+
+impl IndexInfo {}

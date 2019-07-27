@@ -1,33 +1,35 @@
-use byteorder::{LittleEndian, ReadBytesExt};
-use std::io::Cursor;
+use bincode;
 use storage::buf_page::HEADER_SIZE;
 use storage::{BufKey, BufPage, BufType, PAGE_SIZE};
 use tuple::tuple_ptr::TuplePtr;
 
 #[test]
 fn test_write_new_tuple() {
-    use storage::buf_page::HEADER_SIZE;
+    use storage::buf_page::{HEADER_SIZE, LOWER_PTR_RANGE, UPPER_PTR_RANGE};
 
     let mut buf_page = new_page();
     let test_data = [5; 16];
     let tuple_ptr = buf_page.write_tuple_data(&test_data, None, None).unwrap();
     assert_eq!(tuple_ptr.buf_offset, 0);
 
-    let mut reader = Cursor::new(&buf_page.buf()[4..8]);
     // upper_ptr
     assert_eq!(
-        reader.read_u16::<LittleEndian>().unwrap() as usize,
+        bincode::deserialize::<u16>(&buf_page.buf()[UPPER_PTR_RANGE]).unwrap()
+            as usize,
         PAGE_SIZE - 16
     );
     // lower_ptr
     assert_eq!(
-        reader.read_u16::<LittleEndian>().unwrap() as usize,
+        bincode::deserialize::<u16>(&buf_page.buf()[LOWER_PTR_RANGE]).unwrap()
+            as usize,
         HEADER_SIZE + 4
     );
-    let mut reader = Cursor::new(&buf_page.buf()[HEADER_SIZE..HEADER_SIZE + 4]);
     // tuple_ptr
     assert_eq!(
-        reader.read_u16::<LittleEndian>().unwrap() as usize,
+        bincode::deserialize::<u16>(
+            &buf_page.buf()[HEADER_SIZE..HEADER_SIZE + 2]
+        )
+        .unwrap() as usize,
         PAGE_SIZE - 16
     );
     // tuple_data

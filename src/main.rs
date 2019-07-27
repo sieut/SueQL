@@ -1,11 +1,10 @@
 #![allow(dead_code)]
 
-extern crate byteorder;
+extern crate bincode;
 extern crate evmap;
-#[macro_use]
-extern crate enum_primitive;
 extern crate linenoise;
 extern crate nom_sql;
+extern crate serde;
 
 #[macro_use]
 mod utils;
@@ -16,6 +15,7 @@ mod data_type;
 mod db_state;
 mod error;
 mod exec;
+mod index;
 mod internal_types;
 mod log;
 mod meta;

@@ -1,3 +1,4 @@
+use bincode;
 use data_type::DataType;
 use db_state::{DbSettings, DbState};
 use log::{LogEntry, LogMgr, OpType, LOG_REL_ID};
@@ -29,9 +30,10 @@ fn test_write_log_entries() {
         .get_buf(&BufKey::new(LOG_REL_ID, 1, BufType::Data))
         .unwrap();
     let guard = log_page.read().unwrap();
-    let written_entry =
-        LogEntry::load(guard.get_tuple_data(&entry_ptr[0]).unwrap().to_vec())
-            .unwrap();
+    let written_entry: LogEntry = bincode::deserialize(
+        &guard.get_tuple_data(&entry_ptr[0]).unwrap().to_vec(),
+    )
+    .unwrap();
 
     teardown(db_state, data_dir);
 
@@ -112,10 +114,12 @@ fn test_recovery() {
     // Persist the Rel creation
     db_state.buf_mgr.persist().unwrap();
     // Insert 2 tuples, there will be 2 uncheckpointed entries after this
-    let tuples = rel.data_from_literal(vec![
-        vec![Literal::String("a".to_string()), Literal::Integer(1)],
-        vec![Literal::String("b".to_string()), Literal::Integer(2)],
-    ]);
+    let tuples = rel
+        .literal_to_data(vec![
+            vec![Literal::String("a".to_string()), Literal::Integer(1)],
+            vec![Literal::String("b".to_string()), Literal::Integer(2)],
+        ])
+        .unwrap();
     rel.write_tuples(tuples, &mut db_state).unwrap();
 
     // Restart db, basically

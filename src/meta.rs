@@ -1,10 +1,9 @@
-use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
+use bincode;
 use data_type::DataType;
 use db_state::State;
 use error::Result;
 use internal_types::{ID, LSN};
 use rel::Rel;
-use std::io::Cursor;
 use storage::buf_mgr::PageLock;
 use storage::{BufKey, BufMgr, BufType};
 use tuple::tuple_desc::TupleDesc;
@@ -55,7 +54,7 @@ impl Meta {
         let buf = buf_mgr.new_buf(&META_BUF_KEY)?;
         let mut guard = buf.write().unwrap();
         // State
-        let state_data: Vec<u8> = State::Down.into();
+        let state_data = bincode::serialize(&State::Down)?;
         guard.write_tuple_data(&state_data, None, None)?;
         // ID Counter
         guard.write_tuple_data(&Meta::default_id_counter(), None, None)?;
@@ -69,8 +68,11 @@ impl Meta {
 
     pub fn set_state(&self, state: State) -> Result<()> {
         let mut guard = self.buf.write().unwrap();
-        let data: Vec<u8> = state.into();
-        guard.write_tuple_data(&data, Some(&STATE_PTR), None)?;
+        guard.write_tuple_data(
+            &bincode::serialize(&state)?,
+            Some(&STATE_PTR),
+            None,
+        )?;
         Ok(())
     }
 
@@ -85,12 +87,12 @@ impl Meta {
     fn inc_counter(&self, ptr: &TuplePtr) -> Result<u32> {
         let mut lock = self.buf.write().unwrap();
 
-        let cur_val = Cursor::new(&lock.get_tuple_data(ptr)?)
-            .read_u32::<LittleEndian>()?;
-
-        let mut data = vec![0u8; 4];
-        LittleEndian::write_u32(&mut data, cur_val + 1);
-        lock.write_tuple_data(&data[0..4], Some(&ptr), None)?;
+        let cur_val: u32 = bincode::deserialize(&lock.get_tuple_data(ptr)?)?;
+        lock.write_tuple_data(
+            &bincode::serialize(&(cur_val + 1))?,
+            Some(&ptr),
+            None,
+        )?;
 
         Ok(cur_val + 1)
     }

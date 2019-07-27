@@ -42,10 +42,12 @@ fn test_write_tuple() {
         vec!["char", "u32"],
     );
     let rel = Rel::new("test_write_tuple", desc, &mut db_state).unwrap();
-    let tuples = rel.data_from_literal(vec![vec![
-        Literal::String("c".to_string()),
-        Literal::Integer(1),
-    ]]);
+    let tuples = rel
+        .literal_to_data(vec![vec![
+            Literal::String("c".to_string()),
+            Literal::Integer(1),
+        ]])
+        .unwrap();
     let ptrs = rel.write_tuples(tuples.clone(), &mut db_state).unwrap();
     assert_eq!(ptrs.len(), 1);
     let ptr = ptrs.get(0).unwrap();

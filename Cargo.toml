@@ -5,9 +5,8 @@ authors = ["sieut"]
 
 [dependencies]
 rand = "^0.4.1"
-byteorder = "1.2.1"
-enum_primitive = "0.1.1"
-num = "0.2.0"
 evmap = "4.2.0"
 linenoise-rust = "0.2.1"
 nom-sql = "0.0.4"
+serde = { version = "1.0.97", features = ["derive"] }
+bincode = "1.1.4"

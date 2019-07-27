@@ -1,7 +1,8 @@
 use internal_types::ID;
-use storage::{BufType, Storable, PAGE_SIZE};
+use serde::{Deserialize, Serialize};
+use storage::{BufType, PAGE_SIZE};
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy, Serialize, Deserialize)]
 pub struct BufKey {
     pub file_id: ID,
     pub offset: u64,
@@ -32,26 +33,5 @@ impl BufKey {
     pub fn inc_offset(mut self) -> BufKey {
         self.offset += 1;
         self
-    }
-}
-
-// NOTE: Currently not saving BufType, might be needed in the future
-impl Storable for BufKey {
-    fn size() -> usize {
-        std::mem::size_of::<ID>() + std::mem::size_of::<u64>()
-    }
-
-    fn from_data(bytes: Vec<u8>) -> Result<(Self, Vec<u8>), std::io::Error> {
-        let (file_id, bytes) = ID::from_data(bytes)?;
-        let (offset, bytes) = u64::from_data(bytes)?;
-        let key = BufKey::new(file_id, offset, BufType::Data);
-        Ok((key, bytes))
-    }
-
-    fn to_data(&self) -> Vec<u8> {
-        let mut data = vec![];
-        data.append(&mut self.file_id.to_data());
-        data.append(&mut self.offset.to_data());
-        data
     }
 }

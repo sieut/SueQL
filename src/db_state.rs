@@ -1,9 +1,7 @@
-extern crate num;
-use self::num::FromPrimitive;
-
 use error::{Error, Result};
 use log::LogMgr;
 use meta::Meta;
+use serde::{Deserialize, Serialize};
 use storage::BufMgr;
 
 #[derive(Clone, Debug)]
@@ -88,23 +86,8 @@ impl DbSettings {
     }
 }
 
-enum_from_primitive! {
-    #[derive(Debug, Copy, Clone)]
-    pub enum State {
-        Up,
-        Down
-    }
-}
-
-impl From<State> for Vec<u8> {
-    fn from(state: State) -> Self {
-        vec![state as u8]
-    }
-}
-
-impl From<&[u8]> for State {
-    fn from(bytes: &[u8]) -> Self {
-        assert!(bytes.len() > 1);
-        State::from_u8(bytes[0]).unwrap()
-    }
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+pub enum State {
+    Up,
+    Down,
 }

@@ -2,8 +2,9 @@ use data_type::DataType;
 use error::{Error, Result};
 use internal_types::TupleData;
 use nom_sql::Literal;
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TupleDesc {
     attr_types: Vec<DataType>,
     attr_names: Vec<String>,
@@ -25,63 +26,19 @@ impl TupleDesc {
         }
     }
 
-    pub fn from_data(data: Vec<u8>) -> Result<TupleDesc> {
-        use storage::Storable;
-        let (num_attrs, mut data) = u16::from_data(data)?;
-        let mut attr_types = vec![];
-        let mut attr_names = vec![];
-        for _ in 0..num_attrs {
-            let (attr_type, leftover) = DataType::from_data(data)?;
-            let (name_len, mut leftover) = u16::from_data(leftover)?;
-            // TODO update this unwrap
-            let attr_name = String::from_utf8(
-                leftover.drain(..name_len as usize).collect::<Vec<_>>(),
-            )
-            .unwrap();
-            data = leftover;
-            attr_types.push(attr_type);
-            attr_names.push(attr_name);
-        }
-
-        Ok(TupleDesc::new(attr_types, attr_names))
-    }
-
-    pub fn to_data(&self) -> Vec<u8> {
-        use storage::Storable;
-        let mut ret = (self.num_attrs() as u16).to_data();
-        ret.append(
-            &mut (0..self.num_attrs() as usize)
-                .map(|i| {
-                    vec![
-                        self.attr_types[i].to_data(),
-                        DataType::VarChar
-                            .string_to_data(&self.attr_names[i])
-                            .unwrap(),
-                    ]
-                    .concat()
-                })
-                .collect::<Vec<_>>()
-                .concat(),
-        );
-        ret
-    }
-
-    pub fn data_from_literal(
+    pub fn literal_to_data(
         &self,
         inputs: Vec<Vec<Literal>>,
-    ) -> Vec<TupleData> {
-        inputs
-            .iter()
-            .map(|tup| {
-                tup.iter()
-                    .enumerate()
-                    .map(|(i, literal)| {
-                        self.attr_types[i].data_from_literal(&literal).unwrap()
-                    })
-                    .collect::<Vec<_>>()
-                    .concat()
-            })
-            .collect()
+    ) -> Result<Vec<TupleData>> {
+        let mut result = vec![];
+        for tup in inputs.iter() {
+            let mut data = vec![];
+            for (i, literal) in tup.iter().enumerate() {
+                data.append(&mut self.attr_types[i].literal_to_data(&literal)?);
+            }
+            result.push(data);
+        }
+        Ok(result)
     }
 
     pub fn create_tuple_data(&self, inputs: Vec<String>) -> TupleData {
@@ -99,10 +56,10 @@ impl TupleDesc {
         &self,
         bytes: &[u8],
         filter_indices: Option<Vec<usize>>,
-    ) -> Option<Vec<String>> {
-        let cols = self.cols(bytes);
+    ) -> Result<Vec<String>> {
+        let cols = self.cols(bytes)?;
         let result = match filter_indices {
-            Some(vec) => vec
+            Some(indices) => indices
                 .iter()
                 .map(|&i| self.attr_types[i].data_to_string(&cols[i]).unwrap())
                 .collect(),
@@ -113,32 +70,26 @@ impl TupleDesc {
                 .map(|(i, attr)| attr.data_to_string(&cols[i]).unwrap())
                 .collect(),
         };
-        Some(result)
+        Ok(result)
     }
 
-    pub fn cols(&self, bytes: &[u8]) -> Vec<Vec<u8>> {
+    pub fn cols(&self, bytes: &[u8]) -> Result<Vec<TupleData>> {
         let mut cols = vec![];
         let mut cur_bytes = 0;
         for attr in self.attr_types.iter() {
-            let attr_len = attr
-                .data_size(Some(&bytes[cur_bytes..bytes.len()]))
-                .unwrap();
+            let attr_len =
+                attr.data_size(Some(&bytes[cur_bytes..bytes.len()]))?;
             cols.push(bytes[cur_bytes..cur_bytes + attr_len].to_vec());
             cur_bytes += attr_len;
         }
 
-        cols
+        Ok(cols)
     }
 
     pub fn assert_data_len(&self, data: &[u8]) -> Result<()> {
         let mut sum = 0;
         for attr in self.attr_types.iter() {
-            sum += match attr.data_size(Some(&data[sum..data.len()])) {
-                Some(size) => size,
-                None => {
-                    return Ok(());
-                }
-            }
+            sum += attr.data_size(Some(&data[sum..data.len()]))?;
         }
 
         if sum == data.len() {
