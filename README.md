@@ -20,11 +20,11 @@ Also thanks [Nick](https://github.com/schainic) for the name idea.
  - [ ] Index
     - [ ] BTree
     - [ ] Hash
- - [ ] Optimizer
  - [ ] Misc
     - [X] Name data files based on DbSettings
     - [X] Debug logging
-    - [ ] Make a Result type that converts various errors (eg. IO Error) and prints helpful debug info
+    - [X] Make a Result type that converts various errors (eg. IO Error) and prints helpful debug info
+    - [X] Use Serde
     - [ ] More OpTypes for WAL
         - [ ] UpdateTuple
         - [ ] NewRel
