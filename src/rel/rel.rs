@@ -6,6 +6,7 @@ use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
 use nom_sql::Literal;
+use serde::{Deserialize, Serialize};
 use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
 use tuple::{TupleDesc, TuplePtr};
 use utils;
@@ -33,6 +34,7 @@ pub struct Rel {
     pub rel_id: ID,
     buf_type: BufType,
     tuple_desc: TupleDesc,
+    indices: Vec<IndexInfo>,
 }
 
 impl Rel {
@@ -46,15 +48,18 @@ impl Rel {
             .get_buf(&BufKey::new(rel_id, 0, buf_type))?;
         let lock = buf_page.read().unwrap();
 
-        assert!(lock.tuple_count() == 1);
+        assert!(lock.tuple_count() == 2);
 
         let mut iter = lock.iter();
         let tuple_desc: TupleDesc = bincode::deserialize(iter.next().unwrap())?;
+        let indices: Vec<IndexInfo> =
+            bincode::deserialize(iter.next().unwrap())?;
 
         Ok(Rel {
             rel_id,
             buf_type,
             tuple_desc,
+            indices,
         })
     }
 
@@ -70,6 +75,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             buf_type: BufType::Data,
+            indices: vec![],
         };
 
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
@@ -92,6 +98,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             buf_type: BufType::Temp,
+            indices: vec![],
         };
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
         Ok(rel)
@@ -107,6 +114,7 @@ impl Rel {
             rel_id,
             tuple_desc,
             buf_type: BufType::Data,
+            indices: vec![],
         };
         Rel::write_new_rel(buf_mgr, &rel)?;
         Ok(rel)
@@ -249,6 +257,11 @@ impl Rel {
             None,
             None,
         )?;
+        lock.write_tuple_data(
+            &bincode::serialize::<Vec<IndexInfo>>(&vec![])?,
+            None,
+            None,
+        )?;
         Ok(())
     }
 
@@ -271,9 +284,8 @@ impl Rel {
     }
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct IndexInfo {
     key: Vec<usize>,
     index: IndexType,
 }
-
-impl IndexInfo {}

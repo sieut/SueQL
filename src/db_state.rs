@@ -84,6 +84,14 @@ impl DbSettings {
             data_dir: None,
         }
     }
+
+    pub fn data_dir<S>(mut self, dir: S) -> DbSettings
+    where
+        S: Into<String>,
+    {
+        self.data_dir = Some(dir.into());
+        self
+    }
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]

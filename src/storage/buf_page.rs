@@ -310,7 +310,7 @@ impl BufPage {
         Ok(())
     }
 
-    fn get_all_ptrs(&self) -> Vec<TuplePtr> {
+    pub fn get_all_ptrs(&self) -> Vec<TuplePtr> {
         (0..self.get_last_tuple_ptr().buf_offset + 1)
             .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
             .filter(|ptr| {
