@@ -11,6 +11,7 @@ pub enum DataType {
     U64,
     I64,
     VarChar,
+    Bool,
 }
 
 impl DataType {
@@ -25,27 +26,23 @@ impl DataType {
             }
             SqlType::Int(_) => Some(DataType::I32),
             SqlType::Varchar(_) => Some(DataType::VarChar),
+            SqlType::Bool => Some(DataType::Bool),
             _ => None,
         }
     }
 
     pub fn match_literal(&self, input: &Literal) -> bool {
-        match self {
-            &DataType::Char => match input {
-                &Literal::String(ref string) => string.len() == 1,
-                _ => false,
-            },
-            &DataType::I32
-            | &DataType::U32
-            | &DataType::I64
-            | &DataType::U64 => match input {
-                &Literal::Integer(_) => true,
-                _ => false,
-            },
-            &DataType::VarChar => match input {
-                &Literal::String(_) => true,
-                _ => false,
-            },
+        match (self, input) {
+            (&DataType::Char, &Literal::String(ref string)) => {
+                string.len() == 1
+            }
+            (&DataType::I32, &Literal::Integer(_))
+            | (&DataType::U32, &Literal::Integer(_))
+            | (&DataType::I64, &Literal::Integer(_))
+            | (&DataType::U64, &Literal::Integer(_)) => true,
+            (&DataType::VarChar, &Literal::String(_)) => true,
+            (&DataType::Bool, &Literal::Integer(_)) => true,
+            _ => false,
         }
     }
 
@@ -73,6 +70,9 @@ impl DataType {
             (&DataType::U64, &Literal::Integer(int)) => {
                 Ok(bincode::serialize(&(int as u64))?)
             }
+            (&DataType::Bool, &Literal::Integer(int)) => {
+                Ok(bincode::serialize(&((int != 0) as u8))?)
+            }
             _ => Err(Error::Internal(String::from("Unmatched data type"))),
         }
     }
@@ -86,13 +86,13 @@ impl DataType {
                 let string: String = bincode::deserialize(bytes)?;
                 Ok(bincode::serialized_size(&string)? as usize)
             }
-            _ => {
-                Err(Error::Internal(String::from("Cannot determine data_size")))
-            }
+            (&DataType::Bool, _) => Ok(1),
+            _ => Err(Error::internal("Cannot determine data_size")),
         }
     }
 
     pub fn string_to_data(&self, input: &str) -> Result<Vec<u8>> {
+        let err_string = format!("Failed to parse {}", input);
         match self {
             &DataType::Char => match input.len() {
                 1 => Ok(input.as_bytes().to_vec()),
@@ -100,29 +100,33 @@ impl DataType {
             },
             &DataType::U32 => match input.parse::<u32>() {
                 Ok(int) => Ok(bincode::serialize(&int)?),
-                Err(_) => {
-                    Err(Error::Internal(format!("Failed to parse {}", input)))
-                }
+                Err(_) => Err(Error::Internal(err_string)),
             },
             &DataType::I32 => match input.parse::<i32>() {
                 Ok(int) => Ok(bincode::serialize(&int)?),
-                Err(_) => {
-                    Err(Error::Internal(format!("Failed to parse {}", input)))
-                }
+                Err(_) => Err(Error::Internal(err_string)),
             },
             &DataType::U64 => match input.parse::<u64>() {
                 Ok(int) => Ok(bincode::serialize(&int)?),
-                Err(_) => {
-                    Err(Error::Internal(format!("Failed to parse {}", input)))
-                }
+                Err(_) => Err(Error::Internal(err_string)),
             },
             &DataType::I64 => match input.parse::<i64>() {
                 Ok(int) => Ok(bincode::serialize(&int)?),
-                Err(_) => {
-                    Err(Error::Internal(format!("Failed to parse {}", input)))
-                }
+                Err(_) => Err(Error::Internal(err_string)),
             },
             &DataType::VarChar => Ok(bincode::serialize(input)?),
+            &DataType::Bool => {
+                if input == "true" {
+                    Ok(bincode::serialize(&1u8)?)
+                } else if input == "false" {
+                    Ok(bincode::serialize(&0u8)?)
+                } else {
+                    match input.parse::<i32>() {
+                        Ok(int) => Ok(bincode::serialize(&((int != 0) as u8))?),
+                        Err(_) => Err(Error::Internal(err_string)),
+                    }
+                }
+            }
         }
     }
 
@@ -147,6 +151,13 @@ impl DataType {
                 Ok(bincode::deserialize::<i64>(bytes)?.to_string())
             }
             &DataType::VarChar => Ok(bincode::deserialize::<String>(bytes)?),
+            &DataType::Bool => {
+                let bool_u8: u8 = bincode::deserialize(bytes)?;
+                match bool_u8 {
+                    0 => Ok(String::from("false")),
+                    _ => Ok(String::from("true")),
+                }
+            }
         }
     }
 }
