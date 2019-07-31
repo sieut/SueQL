@@ -109,7 +109,7 @@ impl BufPage {
                     ),
                     _ => {
                         self.set_gap_count(self.gap_count - 1)?;
-                        self.get_gap()
+                        self.get_gap().unwrap()
                     }
                 };
                 let new_start = self.upper_ptr - tuple_data.len();
@@ -144,7 +144,7 @@ impl BufPage {
         lsn: Option<LSN>,
     ) -> Result<()> {
         self.is_valid_tuple_ptr(tuple_ptr)?;
-        let last_ptr = self.get_last_tuple_ptr();
+        let last_ptr = self.get_last_tuple_ptr().unwrap();
         let (start, end) = self.get_tuple_range(tuple_ptr)?;
         let tup_len = end - start;
 
@@ -193,7 +193,7 @@ impl BufPage {
         self.is_valid_tuple_ptr(&tuple_ptr)?;
         loop {
             tuple_ptr.buf_offset += 1;
-            if tuple_ptr.buf_offset > self.get_last_tuple_ptr().buf_offset {
+            if tuple_ptr.buf_offset > self.get_last_tuple_ptr().unwrap().buf_offset {
                 break Ok(tuple_ptr);
             }
 
@@ -230,7 +230,10 @@ impl BufPage {
     fn is_valid_tuple_ptr(&self, tuple_ptr: &TuplePtr) -> Result<()> {
         if self.buf_key != tuple_ptr.buf_key {
             Err(Error::Internal(String::from("Invalid buf_key")))
-        } else if tuple_ptr.buf_offset > self.get_last_tuple_ptr().buf_offset {
+        } else if self.tuple_count() == 0
+            || tuple_ptr.buf_offset
+                > self.get_last_tuple_ptr().unwrap().buf_offset
+        {
             Err(Error::Internal(String::from(format!(
                 "Invalid buf_offset {}",
                 tuple_ptr.buf_offset
@@ -269,10 +272,13 @@ impl BufPage {
         Ok((start, end))
     }
 
-    fn get_last_tuple_ptr(&self) -> TuplePtr {
-        TuplePtr {
-            buf_key: self.buf_key.clone(),
-            buf_offset: (self.lower_ptr - HEADER_SIZE) / 4 - 1,
+    fn get_last_tuple_ptr(&self) -> Option<TuplePtr> {
+        match self.tuple_count() {
+            0 => None,
+            _ => Some(TuplePtr {
+                buf_key: self.buf_key.clone(),
+                buf_offset: (self.lower_ptr - HEADER_SIZE) / 4 - 1,
+            }),
         }
     }
 
@@ -311,23 +317,28 @@ impl BufPage {
     }
 
     pub fn get_all_ptrs(&self) -> Vec<TuplePtr> {
-        (0..self.get_last_tuple_ptr().buf_offset + 1)
-            .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
-            .filter(|ptr| {
-                let (start, end) = self.get_tuple_range(ptr).unwrap();
-                start != 0 && end != 0
-            })
-            .collect()
+        match self.get_last_tuple_ptr() {
+            None => vec![],
+            Some(last_ptr) => (0..last_ptr.buf_offset + 1)
+                .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
+                .filter(|ptr| {
+                    let (start, end) = self.get_tuple_range(ptr).unwrap();
+                    start != 0 && end != 0
+                })
+                .collect(),
+        }
     }
 
-    fn get_gap(&self) -> TuplePtr {
-        (0..self.get_last_tuple_ptr().buf_offset + 1)
-            .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
-            .find(|ptr| {
-                let (start, end) = self.get_tuple_range(ptr).unwrap();
-                start == 0 && end == 0
-            })
-            .unwrap()
+    fn get_gap(&self) -> Option<TuplePtr> {
+        match self.get_last_tuple_ptr() {
+            None => None,
+            Some(last_ptr) => (0..last_ptr.buf_offset + 1)
+                .map(|offset| TuplePtr::new(self.buf_key.clone(), offset))
+                .find(|ptr| {
+                    let (start, end) = self.get_tuple_range(ptr).unwrap();
+                    start == 0 && end == 0
+                }),
+        }
     }
 
     pub fn available_data_space(&self) -> usize {
