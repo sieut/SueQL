@@ -104,15 +104,7 @@ impl HashIndex {
         let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
         let bucket_guard = bucket.read().unwrap();
 
-        let item = bucket_guard.iter().find_map(|tup| {
-            let item: HashItem = bincode::deserialize(tup).unwrap();
-            if item.hash == hash {
-                Some(item)
-            } else {
-                None
-            }
-        });
-        match item {
+        match self.get_item(hash, &*bucket_guard) {
             Some(item) => Ok(item.ptr),
             None => {
                 Err(Error::Internal(String::from("Item not found in index")))
@@ -142,8 +134,17 @@ impl HashIndex {
             let bucket_key = self.get_bucket(hash, &next, level)?;
             let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
             let mut bucket_guard = bucket.write().unwrap();
-            self.write_item(hash, ptr, &mut *bucket_guard)?;
-            bucket_guard.tuple_count() > ITEMS_PER_BUCKET
+            match self.get_item(hash, &*bucket_guard) {
+                Some(_) => {
+                    return Err(Error::Internal(String::from(
+                        "Item already exists in index",
+                    )))
+                }
+                None => {
+                    self.write_item(hash, ptr, &mut *bucket_guard)?;
+                    bucket_guard.tuple_count() > ITEMS_PER_BUCKET
+                }
+            }
         };
 
         if need_split {
@@ -162,6 +163,17 @@ impl HashIndex {
         let item = HashItem { hash, ptr };
         bucket.write_tuple_data(&bincode::serialize(&item)?, None, None)?;
         Ok(())
+    }
+
+    fn get_item(&self, hash: u128, bucket: &BufPage) -> Option<HashItem> {
+        bucket.iter().find_map(|tup| {
+            let item: HashItem = bincode::deserialize(tup).unwrap();
+            if item.hash == hash {
+                Some(item)
+            } else {
+                None
+            }
+        })
     }
 
     fn split(&self, meta: &mut BufPage, db_state: &mut DbState) -> Result<()> {
