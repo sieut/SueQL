@@ -54,10 +54,11 @@ pub fn get_table_id(name: String, db_state: &mut DbState) -> Result<ID> {
         db_state,
         |data| {
             let vals = rel.data_to_strings(data, None).unwrap();
-            vals[0].clone() == name
+            Ok(vals[0].clone() == name)
         },
         |data, _db_state| {
             id = rel.data_to_strings(data, None).unwrap()[1].clone();
+            Ok(())
         },
     )?;
     Ok(id.parse::<ID>().unwrap())

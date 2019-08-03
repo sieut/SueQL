@@ -31,10 +31,10 @@ impl ExecNode for Projection {
 
                 input.scan(
                     db_state,
-                    |_| true,
+                    |_| Ok(true),
                     |data, db_state| {
                         // TODO handle the unwraps
-                        let cols = input.tuple_desc().cols(data).unwrap();
+                        let cols = input.tuple_desc().cols(data)?;
                         let cols: Vec<Vec<u8>> = self
                             .indices
                             .iter()
@@ -43,12 +43,11 @@ impl ExecNode for Projection {
                         let projected = cols.concat();
 
                         if buf_guard.available_data_space() < projected.len() {
-                            output.append_page(&buf_guard, db_state).unwrap();
+                            output.append_page(&buf_guard, db_state)?;
                             buf_guard.clear();
                         }
-                        buf_guard
-                            .write_tuple_data(&projected, None, None)
-                            .unwrap();
+                        buf_guard.write_tuple_data(&projected, None, None)?;
+                        Ok(())
                     },
                 )?;
 
@@ -57,12 +56,14 @@ impl ExecNode for Projection {
             (DataStore::Rel(input), DataStore::Out) => {
                 input.scan(
                     db_state,
-                    |_| true,
+                    |_| Ok(true),
                     |data, _db_state| {
-                        let outputs = input
-                            .data_to_strings(data, Some(self.indices.clone()))
-                            .unwrap();
+                        let outputs = input.data_to_strings(
+                            data,
+                            Some(self.indices.clone()),
+                        )?;
                         println!("{:?}", outputs);
+                        Ok(())
                     },
                 )?;
                 Ok(())

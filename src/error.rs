@@ -16,6 +16,10 @@ impl Error {
             _ => None,
         }
     }
+
+    pub fn internal<S: Into<String>>(e: S) -> Error {
+        Error::Internal(e.into())
+    }
 }
 
 impl From<std::io::Error> for Error {

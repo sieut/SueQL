@@ -193,7 +193,9 @@ impl BufPage {
         self.is_valid_tuple_ptr(&tuple_ptr)?;
         loop {
             tuple_ptr.buf_offset += 1;
-            if tuple_ptr.buf_offset > self.get_last_tuple_ptr().unwrap().buf_offset {
+            if tuple_ptr.buf_offset
+                > self.get_last_tuple_ptr().unwrap().buf_offset
+            {
                 break Ok(tuple_ptr);
             }
 

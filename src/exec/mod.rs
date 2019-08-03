@@ -1,13 +1,17 @@
 pub mod create_table;
 pub mod data_store;
 pub mod exec_node;
+pub mod expr;
 pub mod insert;
 mod planner;
 pub mod projection;
+#[cfg(test)]
+mod tests;
 
 pub use self::create_table::CreateTable;
 pub use self::data_store::DataStore;
 pub use self::exec_node::ExecNode;
+pub use self::expr::Expr;
 pub use self::insert::Insert;
 pub use self::projection::Projection;
 

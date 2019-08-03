@@ -203,8 +203,8 @@ impl Rel {
         mut then: Then,
     ) -> Result<()>
     where
-        Filter: Fn(&[u8]) -> bool,
-        Then: FnMut(&[u8], &mut DbState),
+        Filter: Fn(&[u8]) -> Result<bool>,
+        Then: FnMut(&[u8], &mut DbState) -> Result<()>,
     {
         // TODO update scan after BufMgr bulk load is added
         rel_read_lock!(self, db_state.buf_mgr);
@@ -217,8 +217,8 @@ impl Rel {
             ))?;
             let guard = page.read().unwrap();
             for tup in guard.iter() {
-                if filter(&*tup) {
-                    then(&*tup, db_state);
+                if filter(&*tup)? {
+                    then(&*tup, db_state)?;
                 }
             }
         }
@@ -243,6 +243,10 @@ impl Rel {
 
     pub fn tuple_desc(&self) -> TupleDesc {
         self.tuple_desc.clone()
+    }
+
+    pub fn indices(&self) -> Vec<IndexInfo> {
+        self.indices.clone()
     }
 
     fn write_new_rel(buf_mgr: &mut BufMgr, rel: &Rel) -> Result<()> {
@@ -285,7 +289,7 @@ impl Rel {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-struct IndexInfo {
+pub struct IndexInfo {
     key: Vec<usize>,
     index: IndexType,
 }

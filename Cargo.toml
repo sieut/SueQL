@@ -7,7 +7,7 @@ authors = ["sieut"]
 rand = "^0.4.1"
 evmap = "4.2.0"
 linenoise-rust = "0.2.1"
-nom-sql = "0.0.4"
+nom-sql = "0.0.7"
 serde = { version = "1.0.97", features = ["derive"] }
 bincode = "1.1.4"
 sha2 = "0.8.0"

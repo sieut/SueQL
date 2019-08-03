@@ -129,9 +129,10 @@ fn test_recovery() {
     let mut written_tuples = vec![];
     rel.scan(
         &mut db_state,
-        |_| true,
+        |_| Ok(true),
         |data, _db_state| {
             written_tuples.push(data.to_vec());
+            Ok(())
         },
     )
     .unwrap();

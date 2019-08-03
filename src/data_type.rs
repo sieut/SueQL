@@ -160,4 +160,15 @@ impl DataType {
             }
         }
     }
+
+    pub fn is_numerical(&self) -> bool {
+        match self {
+            &DataType::I32
+            | &DataType::I64
+            | &DataType::U32
+            | &DataType::U64
+            | &DataType::Bool => true,
+            _ => false,
+        }
+    }
 }
