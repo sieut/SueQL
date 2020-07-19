@@ -1,16 +1,15 @@
 use bincode;
 use data_type::DataType;
-use db_state::{DbSettings, DbState};
-use log::{LogEntry, LogMgr, OpType, LOG_REL_ID};
-use meta::Meta;
+use log::{LogEntry, OpType, LOG_REL_ID};
 use rel::Rel;
-use storage::{BufKey, BufMgr, BufType};
+use storage::{BufKey, BufType};
 use tuple::TupleDesc;
+use test_utils::{setup_no_persist, teardown};
 
 #[test]
 fn test_write_log_entries() {
     let data_dir = "test_write_log_entries";
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
 
     let entry = LogEntry::new(
         BufKey::new(3, 1, BufType::Data),
@@ -35,7 +34,7 @@ fn test_write_log_entries() {
     )
     .unwrap();
 
-    teardown(db_state, data_dir);
+    teardown(db_state);
 
     assert_eq!(entry_ptr.len(), 1);
 
@@ -46,7 +45,7 @@ fn test_write_log_entries() {
 #[test]
 fn test_log_checkpoints() {
     let data_dir = "test_log_checkpoints";
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
 
     let entry = LogEntry::new(
         BufKey::new(3, 1, BufType::Data),
@@ -86,7 +85,7 @@ fn test_log_checkpoints() {
         .confirm_checkpoint(cp_3, &mut db_state.buf_mgr)
         .unwrap();
 
-    teardown(db_state, data_dir);
+    teardown(db_state);
 
     assert_eq!(cp_1.buf_key, BufKey::new(LOG_REL_ID, 1, BufType::Data));
     assert_eq!(cp_1.buf_offset, 0);
@@ -103,7 +102,7 @@ fn test_recovery() {
     use nom_sql::Literal;
 
     let data_dir = "test_recovery";
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
     // Create a Rel
     let desc = TupleDesc::new(
         vec![DataType::Char, DataType::U32],
@@ -123,7 +122,7 @@ fn test_recovery() {
     rel.write_tuples(tuples, &mut db_state).unwrap();
 
     // Restart db, basically
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
     // Load the Rel and check for the tuples
     let rel = Rel::load(rel_id, BufType::Data, &mut db_state).unwrap();
     let mut written_tuples = vec![];
@@ -137,7 +136,7 @@ fn test_recovery() {
     )
     .unwrap();
 
-    teardown(db_state, data_dir);
+    teardown(db_state);
 
     assert_eq!(written_tuples.len(), 2);
     let data1 = rel.data_to_strings(&written_tuples[0], None).unwrap();
@@ -153,7 +152,7 @@ fn test_recovery() {
 // TODO This test does not pass because new rel is not an OpType
 fn test_recover_new_rel() {
     let data_dir = "test_recover_new_rel";
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
     // Persist the DB creation
     db_state.buf_mgr.persist().unwrap();
     // Create a Rel
@@ -164,44 +163,10 @@ fn test_recover_new_rel() {
     let rel = Rel::new("rel", desc.clone(), &mut db_state).unwrap();
     let rel_id = rel.rel_id;
     // Restart db, basically
-    let mut db_state = setup(data_dir);
+    let mut db_state = setup_no_persist(data_dir);
     // Load the Rel
     let rel = Rel::load(rel_id, BufType::Data, &mut db_state).unwrap();
-    teardown(db_state, data_dir);
+    teardown(db_state);
 
     assert_eq!(rel.tuple_desc(), desc);
-}
-
-fn setup(data_dir: &str) -> DbState {
-    use std::fs::create_dir;
-    use std::io::ErrorKind;
-
-    match create_dir(data_dir) {
-        Ok(_) => {}
-        Err(e) => match e.kind() {
-            ErrorKind::AlreadyExists => {}
-            _ => panic!("Error when setting up test: {:?}", e),
-        },
-    };
-
-    let settings = DbSettings {
-        buf_mgr_size: None,
-        data_dir: Some(data_dir.to_string()),
-    };
-
-    let mut buf_mgr = BufMgr::new(settings.clone());
-    let log_mgr = LogMgr::create_and_load(&mut buf_mgr).unwrap();
-    let meta = Meta::create_and_load(&mut buf_mgr).unwrap();
-    DbState {
-        buf_mgr,
-        log_mgr,
-        meta,
-        settings,
-    }
-}
-
-fn teardown(mut db_state: DbState, data_dir: &str) {
-    use std::fs::remove_dir_all;
-    db_state.shutdown().unwrap();
-    remove_dir_all(data_dir).unwrap();
 }
