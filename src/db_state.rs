@@ -14,7 +14,7 @@ pub struct DbState {
 
 impl DbState {
     pub fn start_db(settings: DbSettings) -> Result<DbState> {
-        let data_dir = settings.clone().data_dir.unwrap_or("data".to_string());
+        let data_dir = settings.get_data_dir();
         DbState::create_data_dir(data_dir)?;
 
         dbg_log!("Starting SueQL database");
@@ -91,6 +91,10 @@ impl DbSettings {
     {
         self.data_dir = Some(dir.into());
         self
+    }
+
+    pub fn get_data_dir(&self) -> String {
+        self.data_dir.clone().unwrap_or("data".to_string())
     }
 }
 
