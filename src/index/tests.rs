@@ -1,13 +1,12 @@
 use data_type::DataType;
-use db_state::{DbSettings, DbState};
 use index::HashIndex;
 use storage::{BufKey, BufType};
 use tuple::{TupleDesc, TuplePtr};
+use test_utils::{setup, teardown};
 
 #[test]
 fn test_insert_and_get_hash() {
-    let settings = DbSettings::default().data_dir("test_insert_and_get_hash");
-    let mut db_state = DbState::start_db(settings).unwrap();
+    let mut db_state = setup("test_insert_and_get_hash");
 
     let key_desc = TupleDesc::new(vec![DataType::U32], vec![""]);
     let index = HashIndex::new(0, key_desc, &mut db_state).unwrap();
@@ -30,8 +29,7 @@ fn test_split_hash() {
     use bincode;
     use sha2::{Digest, Sha256};
 
-    let settings = DbSettings::default().data_dir("test_split_hash");
-    let mut db_state = DbState::start_db(settings).unwrap();
+    let mut db_state = setup("test_split_hash");
 
     let key_desc = TupleDesc::new(vec![DataType::U32], vec![""]);
     let index = HashIndex::new(0, key_desc, &mut db_state).unwrap();
@@ -87,10 +85,4 @@ fn test_split_hash() {
     assert_eq!(next, BufKey::new(index.file_id, 2, BufType::Data));
     assert_eq!(level, 1);
     assert!(new_page_ok);
-}
-
-fn teardown(mut db_state: DbState) {
-    use std::fs::remove_dir_all;
-    db_state.shutdown().unwrap();
-    remove_dir_all(db_state.settings.data_dir.unwrap()).unwrap();
 }

@@ -3,6 +3,11 @@ use storage::BufMgr;
 use log::LogMgr;
 use meta::Meta;
 
+pub fn setup(data_dir: &str) -> DbState {
+    let settings = DbSettings::default().data_dir(data_dir);
+    DbState::start_db(settings).unwrap()
+}
+
 pub fn setup_no_persist(data_dir: &str) -> DbState {
     // Similar to start_db but persist loop is not started
     use std::fs::create_dir;
