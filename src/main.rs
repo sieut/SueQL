@@ -21,6 +21,7 @@ mod internal_types;
 mod log;
 mod meta;
 mod storage;
+mod test_utils;
 mod tuple;
 
 use db_state::{DbSettings, DbState};
