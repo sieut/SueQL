@@ -7,10 +7,10 @@ use storage::PAGE_SIZE;
 use tuple::tuple_ptr::TuplePtr;
 
 pub const HEADER_SIZE: usize = 12;
-pub const LSN_RANGE: std::ops::Range<usize> = (0..4);
-pub const UPPER_PTR_RANGE: std::ops::Range<usize> = (4..6);
-pub const LOWER_PTR_RANGE: std::ops::Range<usize> = (6..8);
-pub const GAP_COUNT_RANGE: std::ops::Range<usize> = (8..12);
+pub const LSN_RANGE: std::ops::Range<usize> = 0..4;
+pub const UPPER_PTR_RANGE: std::ops::Range<usize> = 4..6;
+pub const LOWER_PTR_RANGE: std::ops::Range<usize> = 6..8;
+pub const GAP_COUNT_RANGE: std::ops::Range<usize> = 8..12;
 
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
