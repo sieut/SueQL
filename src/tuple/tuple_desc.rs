@@ -26,6 +26,23 @@ impl TupleDesc {
         }
     }
 
+    pub fn subset(&self, indices: &Vec<usize>) -> Result<TupleDesc> {
+        let attr_types = indices
+            .iter()
+            .map(|i| self.attr_types.get(*i).cloned())
+            .collect::<Option<Vec<_>>>();
+        let attr_names = indices
+            .iter()
+            .map(|i| self.attr_names.get(*i).cloned())
+            .collect::<Option<Vec<_>>>();
+
+        match (attr_types, attr_names) {
+            (Some(types), Some(names)) => Ok(TupleDesc::new(types, names)),
+            _ => Err(Error::Internal(
+                    "Invalid index for TupleDesc::subset".to_string()))
+        }
+    }
+
     pub fn literal_to_data(
         &self,
         inputs: Vec<Vec<Literal>>,

@@ -1,7 +1,7 @@
 use bincode;
 use db_state::DbState;
 use error::Result;
-use index::IndexType;
+use index::{HashIndex, IndexType};
 use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
 use meta;
@@ -181,6 +181,39 @@ impl Rel {
         Ok(())
     }
 
+    pub fn new_index(
+        &mut self,
+        key: Vec<usize>,
+        index_type: IndexType,
+        db_state: &mut DbState,
+    ) -> Result<IndexInfo> {
+        let key_desc = self.tuple_desc.subset(&key)?;
+        let file_id = match &index_type {
+            &IndexType::Hash => {
+                HashIndex::new(self.rel_id, key_desc, db_state)?.file_id
+            }
+        };
+
+        let info = IndexInfo {
+            file_id,
+            key,
+            index_type,
+        };
+        let meta_page = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
+        let mut meta_lock = meta_page.write().unwrap();
+        self.indices.push(info.clone());
+        let indices_ptr = TuplePtr {
+            buf_key: meta_lock.buf_key.clone(),
+            buf_offset: 1,
+        };
+        meta_lock.write_tuple_data(
+            &bincode::serialize::<Vec<IndexInfo>>(&self.indices)?,
+            Some(&indices_ptr),
+            None,
+        )?;
+        Ok(info)
+    }
+
     fn write_insert_log(
         &self,
         buf_key: BufKey,
@@ -290,6 +323,7 @@ impl Rel {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct IndexInfo {
-    key: Vec<usize>,
-    index: IndexType,
+    pub file_id: ID,
+    pub key: Vec<usize>,
+    pub index_type: IndexType,
 }

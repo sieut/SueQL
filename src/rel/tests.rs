@@ -1,9 +1,10 @@
 use data_type::DataType;
 use error::Result;
+use index::{HashIndex, IndexType};
 use super::Rel;
 use storage::BufType;
 use tuple::TupleDesc;
-use test_utils::{setup_no_persist, teardown};
+use test_utils::{setup, setup_no_persist, teardown};
 use utils;
 
 #[test]
@@ -84,4 +85,26 @@ fn test_rel_lock_macro() -> Result<()> {
 
     teardown(db_state);
     Ok(())
+}
+
+#[test]
+fn test_new_hash_index() {
+    let mut db_state = setup("test_new_hash_index");
+    let desc = TupleDesc::new(
+        vec![DataType::Char, DataType::U32],
+        vec!["char", "u32"],
+    );
+    let mut rel = Rel::new(
+        "test_new_hash_index",
+        desc.clone(),
+        &mut db_state).unwrap();
+    let index_info = rel.new_index(vec![0], IndexType::Hash, &mut db_state).unwrap();
+    let index = HashIndex::load(index_info.file_id, &mut db_state);
+    teardown(db_state);
+
+    assert!(index.is_ok());
+    let index = index.unwrap();
+    assert_eq!(index.rel_id, rel.rel_id);
+    assert_eq!(index.key_desc,
+        TupleDesc::new(vec![DataType::Char], vec!["char"]));
 }
