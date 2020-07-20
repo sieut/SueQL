@@ -1,7 +1,8 @@
 use db_state::DbSettings;
 use std::io::Write;
 use storage::buf_page::HEADER_SIZE;
-use storage::{BufKey, BufMgr, BufPage, BufType, PAGE_SIZE};
+use storage::{BufKey, BufPage, BufType, PAGE_SIZE};
+use super::BufMgr;
 
 #[test]
 fn test_bufmgr_get() {

@@ -1,6 +1,7 @@
 use bincode;
 use storage::buf_page::HEADER_SIZE;
-use storage::{BufKey, BufPage, BufType, PAGE_SIZE};
+use storage::{BufKey, BufType, PAGE_SIZE};
+use super::BufPage;
 use tuple::tuple_ptr::TuplePtr;
 
 #[test]
@@ -50,8 +51,11 @@ fn test_update_tuple() {
         let to_update =
             buf_page.write_tuple_data(&[1u8; 4], None, None).unwrap();
         let two = buf_page.write_tuple_data(&[2u8; 4], None, None).unwrap();
+        let before_range = buf_page.get_tuple_range(&to_update).unwrap();
         // Update
         buf_page.write_tuple_data(&[4u8; 4], Some(&to_update), None).unwrap();
+        let after_range = buf_page.get_tuple_range(&to_update).unwrap();
+        assert_eq!(before_range, after_range);
         assert_eq!(buf_page.get_tuple_data(&zero).unwrap(), &[0u8; 4]);
         assert_eq!(buf_page.get_tuple_data(&to_update).unwrap(), &[4u8; 4]);
         assert_eq!(buf_page.get_tuple_data(&two).unwrap(), &[2u8; 4]);
@@ -65,8 +69,11 @@ fn test_update_tuple() {
         let to_update =
             buf_page.write_tuple_data(&[1u8; 4], None, None).unwrap();
         let two = buf_page.write_tuple_data(&[2u8; 4], None, None).unwrap();
+        let before_range = buf_page.get_tuple_range(&to_update).unwrap();
         // Update
         buf_page.write_tuple_data(&[4u8; 8], Some(&to_update), None).unwrap();
+        let after_range = buf_page.get_tuple_range(&to_update).unwrap();
+        assert_ne!(before_range, after_range);
         assert_eq!(buf_page.get_tuple_data(&zero).unwrap(), &[0u8; 4]);
         assert_eq!(buf_page.get_tuple_data(&to_update).unwrap(), &[4u8; 8]);
         assert_eq!(buf_page.get_tuple_data(&two).unwrap(), &[2u8; 4]);
