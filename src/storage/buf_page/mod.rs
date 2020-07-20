@@ -12,6 +12,9 @@ pub const UPPER_PTR_RANGE: std::ops::Range<usize> = 4..6;
 pub const LOWER_PTR_RANGE: std::ops::Range<usize> = 6..8;
 pub const GAP_COUNT_RANGE: std::ops::Range<usize> = 8..12;
 
+#[cfg(test)]
+mod tests;
+
 // Page layout will be similar to Postgres'
 // http://www.interdb.jp/pg/pgsql01.html#_1.3.
 pub struct BufPage {

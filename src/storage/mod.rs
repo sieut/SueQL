@@ -10,6 +10,3 @@ pub use self::buf_mgr::BufMgr;
 pub use self::buf_page::BufPage;
 pub use self::buf_page::PagePtr;
 pub use self::buf_type::BufType;
-
-#[cfg(test)]
-mod tests;

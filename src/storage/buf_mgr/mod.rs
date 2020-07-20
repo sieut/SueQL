@@ -13,6 +13,9 @@ use storage::buf_key::BufKey;
 use storage::buf_page::BufPage;
 use utils;
 
+#[cfg(test)]
+mod tests;
+
 #[macro_use]
 macro_rules! insert {
     ($evmap_lock:expr, $key:expr, $val:expr) => {
