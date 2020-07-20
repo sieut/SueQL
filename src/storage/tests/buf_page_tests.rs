@@ -41,6 +41,39 @@ fn test_write_new_tuple() {
 }
 
 #[test]
+fn test_update_tuple() {
+    // With same length
+    {
+        let mut buf_page = new_page();
+        // Write some tuples
+        let zero = buf_page.write_tuple_data(&[0u8; 4], None, None).unwrap();
+        let to_update =
+            buf_page.write_tuple_data(&[1u8; 4], None, None).unwrap();
+        let two = buf_page.write_tuple_data(&[2u8; 4], None, None).unwrap();
+        // Update
+        buf_page.write_tuple_data(&[4u8; 4], Some(&to_update), None).unwrap();
+        assert_eq!(buf_page.get_tuple_data(&zero).unwrap(), &[0u8; 4]);
+        assert_eq!(buf_page.get_tuple_data(&to_update).unwrap(), &[4u8; 4]);
+        assert_eq!(buf_page.get_tuple_data(&two).unwrap(), &[2u8; 4]);
+    }
+
+    // With different length
+    {
+        let mut buf_page = new_page();
+        // Write some tuples
+        let zero = buf_page.write_tuple_data(&[0u8; 4], None, None).unwrap();
+        let to_update =
+            buf_page.write_tuple_data(&[1u8; 4], None, None).unwrap();
+        let two = buf_page.write_tuple_data(&[2u8; 4], None, None).unwrap();
+        // Update
+        buf_page.write_tuple_data(&[4u8; 8], Some(&to_update), None).unwrap();
+        assert_eq!(buf_page.get_tuple_data(&zero).unwrap(), &[0u8; 4]);
+        assert_eq!(buf_page.get_tuple_data(&to_update).unwrap(), &[4u8; 8]);
+        assert_eq!(buf_page.get_tuple_data(&two).unwrap(), &[2u8; 4]);
+    }
+}
+
+#[test]
 fn test_get_tuple_data() {
     let mut buf_page = new_page();
     buf_page.write_tuple_data(&[2u8; 8], None, None).unwrap();

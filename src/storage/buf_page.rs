@@ -90,11 +90,19 @@ impl BufPage {
                 self.is_valid_tuple_ptr(ptr)?;
                 // TODO handle this case
                 // TODO this case will also happen if a column is of variable length
-                if self.get_tuple_len(ptr)? != tuple_data.len() {
-                    panic!("Different sized tuple");
+                let (start, end) = self.get_tuple_range(ptr)?;
+                let tup_len = end - start;
+                if tup_len != tuple_data.len() {
+                    self.shift_data(start, tup_len)?;
+                    self.write_start_end(
+                        &ptr,
+                        (self.upper_ptr - tuple_data.len(), self.upper_ptr),
+                    )?;
+                    self.set_upper_ptr(self.upper_ptr - tuple_data.len())?;
+                    (ptr.clone(), self.upper_ptr)
+                } else {
+                    (ptr.clone(), start)
                 }
-                let (page_ptr, _) = self.get_tuple_range(ptr)?;
-                (ptr.clone(), page_ptr)
             }
             None => {
                 if self.available_data_space() < tuple_data.len() {
@@ -148,31 +156,7 @@ impl BufPage {
         let (start, end) = self.get_tuple_range(tuple_ptr)?;
         let tup_len = end - start;
 
-        if start != self.upper_ptr {
-            // Shift data section
-            let data = self.buf[self.upper_ptr..start].to_vec();
-            self.buf[self.upper_ptr + tup_len..end].clone_from_slice(&data);
-            // Update ptrs of shifted tuples
-            let affected_ptrs: Vec<_> = self
-                .get_all_ptrs()
-                .iter()
-                .cloned()
-                .filter(|ptr| {
-                    let (ptr_start, ptr_end) =
-                        self.get_tuple_range(ptr).unwrap();
-                    ptr_start >= self.upper_ptr && ptr_end <= start
-                })
-                .collect();
-            for ptr in affected_ptrs.iter() {
-                let (ptr_start, ptr_end) = self.get_tuple_range(&ptr).unwrap();
-                self.write_start_end(
-                    &ptr,
-                    (ptr_start + tup_len, ptr_end + tup_len),
-                )?;
-            }
-        }
-
-        self.set_upper_ptr(self.upper_ptr + tup_len)?;
+        self.shift_data(start, tup_len)?;
 
         if last_ptr == *tuple_ptr {
             self.set_lower_ptr(self.lower_ptr - 4)?;
@@ -186,6 +170,33 @@ impl BufPage {
         }
 
         self.update_lsn(lsn)?;
+        Ok(())
+    }
+
+    /// Shift data from upper_ptr to end dist bytes
+    fn shift_data(&mut self, end: PagePtr, dist: usize) -> Result<()> {
+        let data = self.buf[self.upper_ptr..end].to_vec();
+        self.buf[self.upper_ptr + dist..end + dist].clone_from_slice(&data);
+        // Update ptrs of shifted tuples
+        let affected_ptrs: Vec<_> = self
+            .get_all_ptrs()
+            .iter()
+            .cloned()
+            .filter(|ptr| {
+                let (ptr_start, ptr_end) =
+                    self.get_tuple_range(ptr).unwrap();
+                ptr_start >= self.upper_ptr && ptr_end <= end
+            })
+            .collect();
+        for ptr in affected_ptrs.iter() {
+            let (ptr_start, ptr_end) = self.get_tuple_range(&ptr).unwrap();
+            self.write_start_end(
+                &ptr,
+                (ptr_start + dist, ptr_end + dist),
+            )?;
+        }
+        // Update upper_ptr
+        self.set_upper_ptr(self.upper_ptr + dist)?;
         Ok(())
     }
 
