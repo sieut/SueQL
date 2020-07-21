@@ -33,7 +33,6 @@ impl ExecNode for Projection {
                     db_state,
                     |_| Ok(true),
                     |data, db_state| {
-                        // TODO handle the unwraps
                         let cols = input.tuple_desc().cols(data)?;
                         let cols: Vec<Vec<u8>> = self
                             .indices
