@@ -3,7 +3,6 @@ use db_state::DbState;
 use error::{Error, Result};
 use internal_types::{TupleData, ID};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use storage::{BufKey, BufPage, BufType};
 use tuple::{TupleDesc, TuplePtr};
 
@@ -99,7 +98,7 @@ impl HashIndex {
             meta_guard.get_tuple_data(&self.level_ptr())?,
         )?;
 
-        let hash = self.hash(data)?;
+        let hash = self.hash(data);
         let bucket_key = self.get_bucket(hash, &next, level)?;
         let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
         let bucket_guard = bucket.read().unwrap();
@@ -129,7 +128,7 @@ impl HashIndex {
             &meta_guard.get_tuple_data(&self.level_ptr())?,
         )?;
 
-        let hash = self.hash(data)?;
+        let hash = self.hash(data);
         let need_split = {
             let bucket_key = self.get_bucket(hash, &next, level)?;
             let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
@@ -252,15 +251,9 @@ impl HashIndex {
         Ok(BufKey::new(self.file_id, bucket as u64, BufType::Data))
     }
 
-    fn hash(&self, data: &TupleData) -> Result<u128> {
-        // Calculate hash and reverse to little endian
-        let hash = Sha256::digest(data)
-            .iter()
-            .rev()
-            .cloned()
-            .collect::<Vec<_>>();
-        let hash = bincode::deserialize(&hash[0..16])?;
-        Ok(hash)
+    fn hash(&self, data: &TupleData) -> u128 {
+        use fasthash::murmur3;
+        murmur3::hash128(data)
     }
 
     fn meta_key(&self) -> BufKey {

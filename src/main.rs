@@ -2,10 +2,10 @@
 
 extern crate bincode;
 extern crate evmap;
+extern crate fasthash;
 extern crate linenoise;
 extern crate nom_sql;
 extern crate serde;
-extern crate sha2;
 
 #[macro_use]
 mod utils;
