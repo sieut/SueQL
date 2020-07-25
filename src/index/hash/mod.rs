@@ -5,14 +5,22 @@ use internal_types::{TupleData, ID};
 use serde::{Deserialize, Serialize};
 use storage::{BufKey, BufPage, BufType};
 use tuple::{TupleDesc, TuplePtr};
+use utils;
+
+#[cfg(test)]
+mod tests;
 
 const INIT_N: u64 = 2;
-const ITEMS_PER_BUCKET: usize = 80; // (PAGE_SIZE - HEADER_SIZE) / sizeof(HashItem) = 127
+// (PAGE_SIZE - HEADER_SIZE) / (sizeof(HashItem) + 4) - overflow_ptr = 91
+const ITEMS_PER_BUCKET: usize = 90;
+const METADATA_ITEMS: usize = 5;
 
+#[derive(Clone)]
 pub struct HashIndex {
     pub file_id: ID,
     pub rel_id: ID,
     pub key_desc: TupleDesc,
+    pub overflow_file_id: ID,
 }
 
 impl HashIndex {
@@ -24,17 +32,19 @@ impl HashIndex {
         ))?;
         let guard = meta_page.read().unwrap();
 
-        // The data should have rel_id, key_desc, next and level
-        assert!(guard.tuple_count() == 4);
-
+        assert!(guard.tuple_count() == METADATA_ITEMS);
         let mut iter = guard.iter();
         let rel_id: ID = bincode::deserialize(iter.next().unwrap())?;
         let key_desc: TupleDesc = bincode::deserialize(iter.next().unwrap())?;
+        let _next: BufKey = bincode::deserialize(iter.next().unwrap())?;
+        let _level: u32 = bincode::deserialize(iter.next().unwrap())?;
+        let overflow_file_id: ID = bincode::deserialize(iter.next().unwrap())?;
 
         Ok(HashIndex {
             file_id,
             rel_id,
             key_desc,
+            overflow_file_id,
         })
     }
 
@@ -44,10 +54,12 @@ impl HashIndex {
         db_state: &mut DbState,
     ) -> Result<HashIndex> {
         let file_id = db_state.meta.get_new_id()?;
+        let overflow_file_id = db_state.meta.get_new_id()?;
         let index = HashIndex {
             file_id,
             rel_id,
             key_desc,
+            overflow_file_id,
         };
 
         let meta_page = db_state.buf_mgr.new_buf(&index.meta_key())?;
@@ -59,6 +71,11 @@ impl HashIndex {
         let _second_page = db_state.buf_mgr.new_buf(&BufKey::new(
             index.file_id,
             2,
+            BufType::Data,
+        ))?;
+        let _overflow = db_state.buf_mgr.new_buf(&BufKey::new(
+            index.overflow_file_id,
+            0,
             BufType::Data,
         ))?;
 
@@ -78,7 +95,10 @@ impl HashIndex {
             None,
             None,
         )?;
-        meta_guard.write_tuple_data(&bincode::serialize(&1u32)?, None, None)?;
+        meta_guard.write_tuple_data(
+            &bincode::serialize(&1u32)?, None, None)?;
+        meta_guard.write_tuple_data(
+            &bincode::serialize(&index.overflow_file_id)?, None, None)?;
 
         Ok(index)
     }
@@ -87,7 +107,7 @@ impl HashIndex {
         &self,
         data: &TupleData,
         db_state: &mut DbState,
-    ) -> Result<TuplePtr> {
+    ) -> Result<Vec<TuplePtr>> {
         self.key_desc.assert_data_len(data)?;
 
         let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
@@ -103,12 +123,10 @@ impl HashIndex {
         let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
         let bucket_guard = bucket.read().unwrap();
 
-        match self.get_item(hash, &*bucket_guard) {
-            Some(item) => Ok(item.ptr),
-            None => {
-                Err(Error::Internal(String::from("Item not found in index")))
-            }
-        }
+        Ok(self.get_items(hash, &*bucket_guard)
+            .iter()
+            .map(|hash_item| hash_item.ptr)
+            .collect())
     }
 
     pub fn insert(
@@ -133,17 +151,8 @@ impl HashIndex {
             let bucket_key = self.get_bucket(hash, &next, level)?;
             let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
             let mut bucket_guard = bucket.write().unwrap();
-            match self.get_item(hash, &*bucket_guard) {
-                Some(_) => {
-                    return Err(Error::Internal(String::from(
-                        "Item already exists in index",
-                    )))
-                }
-                None => {
-                    self.write_item(hash, ptr, &mut *bucket_guard)?;
-                    bucket_guard.tuple_count() > ITEMS_PER_BUCKET
-                }
-            }
+            self.write_item(hash, ptr, &mut *bucket_guard)?;
+            bucket_guard.tuple_count() > ITEMS_PER_BUCKET
         };
 
         if need_split {
@@ -164,15 +173,15 @@ impl HashIndex {
         Ok(())
     }
 
-    fn get_item(&self, hash: u128, bucket: &BufPage) -> Option<HashItem> {
-        bucket.iter().find_map(|tup| {
+    fn get_items(&self, hash: u128, bucket: &BufPage) -> Vec<HashItem> {
+        bucket.iter().filter_map(|tup| {
             let item: HashItem = bincode::deserialize(tup).unwrap();
             if item.hash == hash {
                 Some(item)
             } else {
                 None
             }
-        })
+        }).collect()
     }
 
     fn split(&self, meta: &mut BufPage, db_state: &mut DbState) -> Result<()> {
@@ -269,8 +278,174 @@ impl HashIndex {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 struct HashItem {
     hash: u128,
     ptr: TuplePtr,
+}
+
+struct HashBucket {
+    buf_key: BufKey,
+    overflow_file_id: ID,
+}
+
+impl HashBucket {
+    fn new(
+        buf_key: BufKey,
+        overflow_file_id: ID,
+        db_state: &mut DbState,
+    ) -> Result<Self> {
+        let page = db_state.buf_mgr.new_buf(&buf_key)?;
+        let mut guard = page.write().unwrap();
+        assert_eq!(guard.tuple_count(), 0);
+        guard.write_tuple_data(
+            &bincode::serialize(&BufKey::new(0, 0, BufType::Data))?,
+            None,
+            None)?;
+        Ok(Self {
+            buf_key,
+            overflow_file_id,
+        })
+    }
+
+    fn write_items(
+        &self,
+        items: Vec<HashItem>,
+        db_state: &mut DbState
+    ) -> Result<()> {
+        let bucket = db_state.buf_mgr.get_buf(&self.buf_key)?;
+        let mut bucket_guard = bucket.write().unwrap();
+        let mut items = self.write_items_to_page(items, &mut bucket_guard)?;
+        if items.is_empty() {
+            Ok(())
+        } else {
+            let mut overflow_key = self.get_overflow_key(
+                &mut bucket_guard, db_state)?;
+            loop {
+                let overflow = db_state.buf_mgr.get_buf(&overflow_key)?;
+                let mut guard = overflow.write().unwrap();
+                items = self.write_items_to_page(items, &mut guard)?;
+                if items.len() > 0 {
+                    overflow_key = self.get_overflow_key(
+                        &mut guard, db_state)?;
+                } else {
+                    break;
+                }
+            };
+            Ok(())
+        }
+    }
+
+    /// Write given items to given page, return the items that are not
+    /// written due to items per bucket restriction
+    fn write_items_to_page(
+        &self,
+        items: Vec<HashItem>,
+        page: &mut BufPage,
+    ) -> Result<Vec<HashItem>> {
+        items
+            .into_iter()
+            .filter_map(|item| {
+                if self.get_items_count(&page) >= ITEMS_PER_BUCKET {
+                    Some(Ok(item))
+                } else {
+                    match bincode::serialize(&item) {
+                        Ok(data) => {
+                            match page.write_tuple_data(&data, None, None) {
+                                Ok(_) => None,
+                                Err(err) => Some(Err(Error::from(err))),
+                            }
+                        }
+                        Err(err) => Some(Err(Error::from(err))),
+                    }
+                }
+            })
+            .collect::<Result<Vec<HashItem>>>()
+    }
+
+    fn get_overflow_key(
+        &self,
+        page: &mut BufPage,
+        db_state: &mut DbState,
+    ) -> Result<BufKey> {
+        let overflow_key: BufKey = bincode::deserialize(
+            &page.iter().next().unwrap())?;
+        if self.is_valid_overflow(&overflow_key) {
+            Ok(overflow_key)
+        } else {
+            let overflow_filename = db_state.buf_mgr.key_to_filename(
+                BufKey::new(self.overflow_file_id, 0, BufType::Data));
+            let overflow_num_pages = utils::num_pages(&overflow_filename)?;
+            let overflow_key = BufKey::new(
+                self.overflow_file_id,
+                overflow_num_pages,
+                BufType::Data,
+            ).inc_offset();
+            HashBucket::new(
+                overflow_key.clone(),
+                self.overflow_file_id,
+                db_state,
+            )?;
+            page.write_tuple_data(
+                &bincode::serialize(&overflow_key)?,
+                Some(&TuplePtr::new(page.buf_key.clone(), 0)),
+                None,
+            )?;
+            Ok(overflow_key)
+        }
+    }
+
+    fn get_items(
+        &self,
+        hash: u128,
+        db_state: &mut DbState,
+    ) -> Result<Vec<HashItem>> {
+        let bucket = db_state.buf_mgr.get_buf(&self.buf_key)?;
+        let bucket_guard = bucket.read().unwrap();
+        let (mut overflow_key, mut result) =
+            self.get_items_from_page(hash, &bucket_guard)?;
+
+        while self.is_valid_overflow(&overflow_key) {
+            let page = db_state.buf_mgr.get_buf(&overflow_key)?;
+            let guard = page.read().unwrap();
+            let (new_overflow_key, mut new_result) =
+                self.get_items_from_page(hash, &guard)?;
+            overflow_key = new_overflow_key;
+            result.append(&mut new_result);
+        }
+
+        Ok(result)
+    }
+
+    fn get_items_from_page(
+        &self,
+        hash: u128,
+        page: &BufPage,
+    ) -> Result<(BufKey, Vec<HashItem>)> {
+        assert!(page.tuple_count() > 1);
+        let mut iter = page.iter();
+        let overflow_key: BufKey = bincode::deserialize(iter.next().unwrap())?;
+        let items = iter
+            .filter_map(|tuple| match bincode::deserialize::<HashItem>(tuple) {
+                Ok(item) => {
+                    if item.hash == hash {
+                        Some(Ok(item))
+                    } else {
+                        None
+                    }
+                }
+                Err(err) => Some(Err(Error::from(err)))
+            }
+            )
+            .collect::<Result<Vec<HashItem>>>()?;
+        Ok((overflow_key, items))
+    }
+
+    fn get_items_count(&self, page: &BufPage) -> usize {
+        page.tuple_count() - 1
+    }
+
+    fn is_valid_overflow(&self, key: &BufKey) -> bool {
+        key.file_id != 0
+    }
 }
