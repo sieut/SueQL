@@ -3,8 +3,8 @@ use error::{Error, Result};
 use internal_types::ID;
 use meta::TABLE_REL_ID;
 use rel::Rel;
-use std::fs::File;
-use std::io::Write;
+use std::fs::{File, metadata};
+use std::io::{Write, ErrorKind};
 
 #[macro_export]
 macro_rules! dbg_log {
@@ -19,6 +19,16 @@ pub fn assert_data_len(data: &[u8], desired_len: usize) -> Result<()> {
         Ok(())
     } else {
         Err(Error::CorruptedData)
+    }
+}
+
+pub fn file_exists(fname: &str) -> bool {
+    match metadata(fname) {
+        Ok(_) => true,
+        Err(err) => match err.kind() {
+            ErrorKind::NotFound => false,
+            _ => true,
+        }
     }
 }
 

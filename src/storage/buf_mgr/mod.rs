@@ -219,13 +219,14 @@ impl BufMgr {
                 // Create new file
                 if key.byte_offset() == 0 {
                     // Check if the file already exists
-                    if fs::metadata(&key.to_filename(self.data_dir())).is_ok() {
+                    let fname = key.to_filename(self.data_dir());
+                    if utils::file_exists(&fname) {
                         Err(Error::from(std::io::Error::new(
                             std::io::ErrorKind::AlreadyExists,
                             "File already exists",
                         )))
                     } else {
-                        utils::create_file(&key.to_filename(self.data_dir()))?;
+                        utils::create_file(&fname)?;
                         self.get_buf(key)
                     }
                 }
