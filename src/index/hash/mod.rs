@@ -63,21 +63,16 @@ impl HashIndex {
         };
 
         let meta_page = db_state.buf_mgr.new_buf(&index.meta_key())?;
-        let _first_page = db_state.buf_mgr.new_buf(&BufKey::new(
-            index.file_id,
-            1,
-            BufType::Data,
-        ))?;
-        let _second_page = db_state.buf_mgr.new_buf(&BufKey::new(
-            index.file_id,
-            2,
-            BufType::Data,
-        ))?;
-        let _overflow = db_state.buf_mgr.new_buf(&BufKey::new(
+        let _first_bucket = HashBucket::new(
+            BufKey::new(index.file_id, 1, BufType::Data),
             index.overflow_file_id,
-            0,
-            BufType::Data,
-        ))?;
+            db_state)?;
+        let _second_bucket = HashBucket::new(
+            BufKey::new(index.file_id, 2, BufType::Data),
+            index.overflow_file_id,
+            db_state)?;
+        let _overflow = db_state.buf_mgr.new_buf(
+            &BufKey::new(index.overflow_file_id, 0, BufType::Data))?;
 
         let mut meta_guard = meta_page.write().unwrap();
         meta_guard.write_tuple_data(
@@ -109,7 +104,6 @@ impl HashIndex {
         db_state: &mut DbState,
     ) -> Result<Vec<TuplePtr>> {
         self.key_desc.assert_data_len(data)?;
-
         let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
         let meta_guard = meta.read().unwrap();
         let next: BufKey =
@@ -117,15 +111,12 @@ impl HashIndex {
         let level: u32 = bincode::deserialize(
             meta_guard.get_tuple_data(&self.level_ptr())?,
         )?;
-
         let hash = self.hash(data);
-        let bucket_key = self.get_bucket(hash, &next, level)?;
-        let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
-        let bucket_guard = bucket.read().unwrap();
-
-        Ok(self.get_items(hash, &*bucket_guard)
+        let bucket = self.get_bucket(hash, &next, level);
+        Ok(bucket
+            .get_items(hash, db_state)?
             .iter()
-            .map(|hash_item| hash_item.ptr)
+            .map(|item| item.ptr)
             .collect())
     }
 
@@ -148,11 +139,11 @@ impl HashIndex {
 
         let hash = self.hash(data);
         let need_split = {
-            let bucket_key = self.get_bucket(hash, &next, level)?;
-            let bucket = db_state.buf_mgr.get_buf(&bucket_key)?;
-            let mut bucket_guard = bucket.write().unwrap();
-            self.write_item(hash, ptr, &mut *bucket_guard)?;
-            bucket_guard.tuple_count() > ITEMS_PER_BUCKET
+            let bucket = self.get_bucket(hash, &next, level);
+            bucket.write_items(
+                vec![HashItem { hash, ptr }],
+                db_state,
+            )?
         };
 
         if need_split {
@@ -192,38 +183,19 @@ impl HashIndex {
         let num_buckets = INIT_N.pow(level);
         let mut new_next = next.clone().inc_offset();
 
-        // Get the pages
-        let next_bucket = db_state.buf_mgr.get_buf(&next)?;
-        let mut next_guard = next_bucket.write().unwrap();
-        let new_bucket = db_state.buf_mgr.new_buf(&BufKey::new(
-            self.file_id,
-            next.offset + (num_buckets as u64),
-            BufType::Data,
-        ))?;
-        let mut new_guard = new_bucket.write().unwrap();
-
-        // Get the ptrs of tuples that are hashed into the new bucket
-        let to_move: Vec<TuplePtr> = next_guard
-            .iter()
-            .zip(next_guard.get_all_ptrs().iter())
-            .filter_map(|(tup, ptr)| {
-                let item: HashItem = bincode::deserialize(tup).unwrap();
-                let bucket =
-                    self.get_bucket(item.hash, &new_next, level).unwrap();
-                if bucket == next {
-                    None
-                } else {
-                    Some(ptr.clone())
-                }
-            })
-            .collect();
-
-        // Move the tuples to the new bucket
-        for ptr in to_move.iter() {
-            let tup = next_guard.get_tuple_data(ptr)?.to_vec();
-            next_guard.remove_tuple(ptr, None)?;
-            new_guard.write_tuple_data(&tup, None, None)?;
-        }
+        let next_bucket = HashBucket {
+            buf_key: next,
+            overflow_file_id: self.overflow_file_id,
+        };
+        let new_bucket = HashBucket::new(
+            BufKey::new(
+                self.file_id,
+                next.offset + (num_buckets as u64),
+                BufType::Data),
+            self.overflow_file_id,
+            db_state,
+        )?;
+        next_bucket.split(&new_bucket, (num_buckets * 2) as u128, db_state)?;
 
         // Update next and level if necessary
         if new_next.offset > num_buckets {
@@ -248,16 +220,17 @@ impl HashIndex {
         hash: u128,
         next: &BufKey,
         level: u32,
-    ) -> Result<BufKey> {
+    ) -> HashBucket {
         let num_buckets = INIT_N.pow(level) as u128;
-
         let bucket = if hash % num_buckets < (next.offset - 1) as u128 {
             hash % (num_buckets * 2) + 1
         } else {
             hash % num_buckets + 1
         };
-
-        Ok(BufKey::new(self.file_id, bucket as u64, BufType::Data))
+        HashBucket {
+            buf_key: BufKey::new(self.file_id, bucket as u64, BufType::Data),
+            overflow_file_id: self.overflow_file_id
+        }
     }
 
     fn hash(&self, data: &TupleData) -> u128 {
@@ -308,16 +281,17 @@ impl HashBucket {
         })
     }
 
+    /// Returns True if bucket is overflowed
     fn write_items(
         &self,
         items: Vec<HashItem>,
         db_state: &mut DbState
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let bucket = db_state.buf_mgr.get_buf(&self.buf_key)?;
         let mut bucket_guard = bucket.write().unwrap();
         let mut items = self.write_items_to_page(items, &mut bucket_guard)?;
         if items.is_empty() {
-            Ok(())
+            Ok(false)
         } else {
             let mut overflow_key = self.get_overflow_key(
                 &mut bucket_guard, db_state)?;
@@ -332,7 +306,7 @@ impl HashBucket {
                     break;
                 }
             };
-            Ok(())
+            Ok(true)
         }
     }
 
@@ -438,6 +412,57 @@ impl HashBucket {
             }
             )
             .collect::<Result<Vec<HashItem>>>()?;
+        Ok((overflow_key, items))
+    }
+
+    fn split(
+        &self,
+        other: &HashBucket,
+        modulo: u128,
+        db_state: &mut DbState,
+    ) -> Result<()> {
+        let bucket = db_state.buf_mgr.get_buf(&self.buf_key)?;
+        let mut bucket_guard = bucket.write().unwrap();
+        let (mut overflow_key, mut split_items) =
+            self.get_split_items_from_page(&mut bucket_guard, modulo)?;
+
+        while self.is_valid_overflow(&overflow_key) {
+            let page = db_state.buf_mgr.get_buf(&overflow_key)?;
+            let mut guard = page.write().unwrap();
+            let (new_overflow_key, mut new_split_items) =
+                self.get_split_items_from_page(&mut guard, modulo)?;
+            overflow_key = new_overflow_key;
+            split_items.append(&mut new_split_items);
+        }
+        other.write_items(split_items, db_state)?;
+        Ok(())
+    }
+
+    fn get_split_items_from_page(
+        &self,
+        page: &mut BufPage,
+        modulo: u128,
+    ) -> Result<(BufKey, Vec<HashItem>)> {
+        assert!(page.tuple_count() > 1);
+        let (overflow_key, items, ptrs) = {
+            let all_ptrs = page.get_all_ptrs();
+            let mut iter = page.iter().zip(all_ptrs.into_iter());
+            let overflow_key: BufKey = bincode::deserialize(
+                iter.next().unwrap().0)?;
+            let mut items = vec![];
+            let mut ptrs = vec![];
+            for (tuple, ptr) in iter {
+                let item = bincode::deserialize::<HashItem>(tuple)?;
+                if item.hash % modulo + 1 != self.buf_key.offset as u128 {
+                    items.push(item);
+                    ptrs.push(ptr);
+                }
+            }
+            (overflow_key, items, ptrs)
+        };
+        for ptr in ptrs.iter() {
+            page.remove_tuple(ptr, None)?;
+        }
         Ok((overflow_key, items))
     }
 

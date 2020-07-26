@@ -44,6 +44,16 @@ fn test_split_hash() {
             }
         })
         .collect();
+    let bucket_three: Vec<u32> = bucket_one
+        .iter()
+        .filter_map(|i| {
+            if index.hash(&bincode::serialize(i).unwrap()) % 4 == 2 {
+                Some(i.clone())
+            } else {
+                None
+            }
+        })
+        .collect();
     // Make sure the index will split
     assert!(bucket_one.len() > ITEMS_PER_BUCKET);
 
@@ -73,16 +83,33 @@ fn test_split_hash() {
     )
     .unwrap();
 
-    let new_page_ok = db_state
-        .buf_mgr
-        .get_buf(&BufKey::new(index.file_id, 3, BufType::Data))
-        .is_ok();
+    let new_bucket = HashBucket {
+        buf_key: BufKey::new(index.file_id, 3, BufType::Data),
+        overflow_file_id: index.overflow_file_id,
+    };
+    let bucket_three_items = bucket_three
+        .iter()
+        .map(|i| {
+            new_bucket.get_items(
+                index.hash(&bincode::serialize(i).unwrap()),
+                &mut db_state).unwrap()
+        })
+        .collect::<Vec<_>>();
 
     teardown(db_state);
 
     assert_eq!(next, BufKey::new(index.file_id, 2, BufType::Data));
     assert_eq!(level, 1);
-    assert!(new_page_ok);
+    bucket_three
+        .iter()
+        .zip(bucket_three_items.iter())
+        .for_each(|(i, items)| {
+            assert_eq!(items.len(), 1);
+            let item = items.get(0).unwrap();
+            assert_eq!(
+                index.hash(&bincode::serialize(i).unwrap()),
+                item.hash);
+        });
 }
 
 #[test]
