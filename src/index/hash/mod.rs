@@ -122,34 +122,31 @@ impl HashIndex {
 
     pub fn insert(
         &self,
-        data: &TupleData,
-        ptr: TuplePtr,
+        items: Vec<(&TupleData, TuplePtr)>,
         db_state: &mut DbState,
     ) -> Result<()> {
-        self.key_desc.assert_data_len(data)?;
+        for (data, _) in items.iter() {
+            self.key_desc.assert_data_len(data)?;
+        }
 
         let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
         let mut meta_guard = meta.write().unwrap();
-        let next: BufKey = bincode::deserialize(
-            &meta_guard.get_tuple_data(&self.next_ptr())?,
-        )?;
-        let level: u32 = bincode::deserialize(
-            &meta_guard.get_tuple_data(&self.level_ptr())?,
-        )?;
-
-        let hash = self.hash(data);
-        let need_split = {
+        // TODO Optimize
+        for (data, ptr) in items.into_iter() {
+            let next: BufKey = bincode::deserialize(
+                &meta_guard.get_tuple_data(&self.next_ptr())?,
+            )?;
+            let level: u32 = bincode::deserialize(
+                &meta_guard.get_tuple_data(&self.level_ptr())?,
+            )?;
+            let hash = self.hash(data);
             let bucket = self.get_bucket(hash, &next, level);
-            bucket.write_items(
-                vec![HashItem { hash, ptr }],
-                db_state,
-            )?
-        };
-
-        if need_split {
-            self.split(&mut *meta_guard, db_state)?;
+            let need_split = bucket.write_items(
+                vec![HashItem { hash, ptr }], db_state)?;
+            if need_split {
+                self.split(&mut *meta_guard, db_state)?;
+            }
         }
-
         Ok(())
     }
 
@@ -257,6 +254,7 @@ struct HashItem {
     ptr: TuplePtr,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 struct HashBucket {
     buf_key: BufKey,
     overflow_file_id: ID,

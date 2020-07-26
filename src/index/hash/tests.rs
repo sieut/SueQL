@@ -15,7 +15,7 @@ fn test_insert_and_get_hash() {
     let test_ptr = TuplePtr::new(test_buf_key.clone(), 4);
     let test_data = vec![1, 2, 3, 4];
     index
-        .insert(&test_data, test_ptr.clone(), &mut db_state)
+        .insert(vec![(&test_data, test_ptr.clone())], &mut db_state)
         .unwrap();
     let return_ptrs = index.get(&test_data, &mut db_state).unwrap();
 
@@ -44,6 +44,10 @@ fn test_split_hash() {
             }
         })
         .collect();
+    let bucket_one_data = bucket_one
+        .iter()
+        .map(|i| bincode::serialize(i).unwrap())
+        .collect::<Vec<_>>();
     let bucket_three: Vec<u32> = bucket_one
         .iter()
         .filter_map(|i| {
@@ -56,16 +60,11 @@ fn test_split_hash() {
         .collect();
     // Make sure the index will split
     assert!(bucket_one.len() > ITEMS_PER_BUCKET);
-
-    for i in bucket_one.iter() {
-        index
-            .insert(
-                &bincode::serialize(&(*i as u32)).unwrap(),
-                TuplePtr::new(test_buf_key.clone(), *i as usize),
-                &mut db_state,
-            )
-            .unwrap();
-    }
+    let items = bucket_one_data
+        .iter()
+        .map(|data| (data, TuplePtr::new(test_buf_key.clone(), 0)))
+        .collect::<Vec<_>>();
+    index.insert(items, &mut db_state).unwrap();
 
     let meta_key = BufKey::new(index.file_id, 0, BufType::Data);
     let meta_page = db_state.buf_mgr.get_buf(&meta_key).unwrap();
