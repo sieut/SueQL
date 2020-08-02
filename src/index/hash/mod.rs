@@ -4,6 +4,7 @@ use error::{Error, Result};
 use internal_types::{TupleData, ID};
 use serde::{Deserialize, Serialize};
 use storage::{BufKey, BufPage, BufType};
+use super::Index;
 use tuple::{TupleDesc, TuplePtr};
 use utils;
 
@@ -23,8 +24,8 @@ pub struct HashIndex {
     pub overflow_file_id: ID,
 }
 
-impl HashIndex {
-    pub fn load(file_id: ID, db_state: &mut DbState) -> Result<HashIndex> {
+impl Index for HashIndex {
+    fn load(file_id: ID, db_state: &mut DbState) -> Result<HashIndex> {
         let meta_page = db_state.buf_mgr.get_buf(&BufKey::new(
             file_id,
             0,
@@ -48,6 +49,61 @@ impl HashIndex {
         })
     }
 
+    fn get(
+        &self,
+        data: &TupleData,
+        db_state: &mut DbState,
+    ) -> Result<Vec<TuplePtr>> {
+        self.key_desc.assert_data_len(data)?;
+        let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
+        let meta_guard = meta.read().unwrap();
+        let next: BufKey =
+            bincode::deserialize(meta_guard.get_tuple_data(&self.next_ptr())?)?;
+        let level: u32 = bincode::deserialize(
+            meta_guard.get_tuple_data(&self.level_ptr())?,
+        )?;
+        let hash = self.hash(data);
+        let bucket = self.get_bucket(hash, &next, level);
+        Ok(bucket
+            .get_items(hash, db_state)?
+            .iter()
+            .map(|item| item.ptr)
+            .collect())
+    }
+
+    fn insert(
+        &self,
+        items: Vec<(&TupleData, TuplePtr)>,
+        db_state: &mut DbState,
+    ) -> Result<()> {
+        for (data, _) in items.iter() {
+            self.key_desc.assert_data_len(data)?;
+        }
+
+        let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
+        let mut meta_guard = meta.write().unwrap();
+        // TODO Optimize
+        for (data, ptr) in items.into_iter() {
+            let next: BufKey = bincode::deserialize(
+                &meta_guard.get_tuple_data(&self.next_ptr())?,
+            )?;
+            let level: u32 = bincode::deserialize(
+                &meta_guard.get_tuple_data(&self.level_ptr())?,
+            )?;
+            let hash = self.hash(data);
+            let bucket = self.get_bucket(hash, &next, level);
+            let need_split = bucket.write_items(
+                vec![HashItem { hash, ptr }], db_state)?;
+            if need_split {
+                self.split(&mut *meta_guard, db_state)?;
+            }
+        }
+        Ok(())
+    }
+
+}
+
+impl HashIndex {
     pub fn new(
         rel_id: ID,
         key_desc: TupleDesc,
@@ -96,58 +152,6 @@ impl HashIndex {
             &bincode::serialize(&index.overflow_file_id)?, None, None)?;
 
         Ok(index)
-    }
-
-    pub fn get(
-        &self,
-        data: &TupleData,
-        db_state: &mut DbState,
-    ) -> Result<Vec<TuplePtr>> {
-        self.key_desc.assert_data_len(data)?;
-        let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
-        let meta_guard = meta.read().unwrap();
-        let next: BufKey =
-            bincode::deserialize(meta_guard.get_tuple_data(&self.next_ptr())?)?;
-        let level: u32 = bincode::deserialize(
-            meta_guard.get_tuple_data(&self.level_ptr())?,
-        )?;
-        let hash = self.hash(data);
-        let bucket = self.get_bucket(hash, &next, level);
-        Ok(bucket
-            .get_items(hash, db_state)?
-            .iter()
-            .map(|item| item.ptr)
-            .collect())
-    }
-
-    pub fn insert(
-        &self,
-        items: Vec<(&TupleData, TuplePtr)>,
-        db_state: &mut DbState,
-    ) -> Result<()> {
-        for (data, _) in items.iter() {
-            self.key_desc.assert_data_len(data)?;
-        }
-
-        let meta = db_state.buf_mgr.get_buf(&self.meta_key())?;
-        let mut meta_guard = meta.write().unwrap();
-        // TODO Optimize
-        for (data, ptr) in items.into_iter() {
-            let next: BufKey = bincode::deserialize(
-                &meta_guard.get_tuple_data(&self.next_ptr())?,
-            )?;
-            let level: u32 = bincode::deserialize(
-                &meta_guard.get_tuple_data(&self.level_ptr())?,
-            )?;
-            let hash = self.hash(data);
-            let bucket = self.get_bucket(hash, &next, level);
-            let need_split = bucket.write_items(
-                vec![HashItem { hash, ptr }], db_state)?;
-            if need_split {
-                self.split(&mut *meta_guard, db_state)?;
-            }
-        }
-        Ok(())
     }
 
     fn write_item(

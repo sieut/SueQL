@@ -1,4 +1,5 @@
 use data_type::DataType;
+use index::Index;
 use super::{HashIndex, HashBucket, HashItem, ITEMS_PER_BUCKET};
 use storage::{BufKey, BufType};
 use tuple::{TupleDesc, TuplePtr};
