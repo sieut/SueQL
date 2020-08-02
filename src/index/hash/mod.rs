@@ -25,30 +25,6 @@ pub struct HashIndex {
 }
 
 impl Index for HashIndex {
-    fn load(file_id: ID, db_state: &mut DbState) -> Result<HashIndex> {
-        let meta_page = db_state.buf_mgr.get_buf(&BufKey::new(
-            file_id,
-            0,
-            BufType::Data,
-        ))?;
-        let guard = meta_page.read().unwrap();
-
-        assert!(guard.tuple_count() == METADATA_ITEMS);
-        let mut iter = guard.iter();
-        let rel_id: ID = bincode::deserialize(iter.next().unwrap())?;
-        let key_desc: TupleDesc = bincode::deserialize(iter.next().unwrap())?;
-        let _next: BufKey = bincode::deserialize(iter.next().unwrap())?;
-        let _level: u32 = bincode::deserialize(iter.next().unwrap())?;
-        let overflow_file_id: ID = bincode::deserialize(iter.next().unwrap())?;
-
-        Ok(HashIndex {
-            file_id,
-            rel_id,
-            key_desc,
-            overflow_file_id,
-        })
-    }
-
     fn get(
         &self,
         data: &TupleData,
@@ -152,6 +128,30 @@ impl HashIndex {
             &bincode::serialize(&index.overflow_file_id)?, None, None)?;
 
         Ok(index)
+    }
+
+    pub fn load(file_id: ID, db_state: &mut DbState) -> Result<HashIndex> {
+        let meta_page = db_state.buf_mgr.get_buf(&BufKey::new(
+            file_id,
+            0,
+            BufType::Data,
+        ))?;
+        let guard = meta_page.read().unwrap();
+
+        assert!(guard.tuple_count() == METADATA_ITEMS);
+        let mut iter = guard.iter();
+        let rel_id: ID = bincode::deserialize(iter.next().unwrap())?;
+        let key_desc: TupleDesc = bincode::deserialize(iter.next().unwrap())?;
+        let _next: BufKey = bincode::deserialize(iter.next().unwrap())?;
+        let _level: u32 = bincode::deserialize(iter.next().unwrap())?;
+        let overflow_file_id: ID = bincode::deserialize(iter.next().unwrap())?;
+
+        Ok(HashIndex {
+            file_id,
+            rel_id,
+            key_desc,
+            overflow_file_id,
+        })
     }
 
     fn write_item(
