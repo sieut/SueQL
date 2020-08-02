@@ -1,6 +1,6 @@
 use data_type::DataType;
 use error::Result;
-use index::{HashIndex, IndexType};
+use index::{Index, HashIndex, IndexType};
 use super::Rel;
 use storage::BufType;
 use tuple::TupleDesc;
