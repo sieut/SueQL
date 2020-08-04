@@ -121,6 +121,16 @@ fn test_bufmgr_ref() {
     teardown_bufmgr(data_dir);
 }
 
+#[test]
+fn test_allocate_mem_bufs() {
+    let data_dir = "allocate_mem_bufs";
+
+    let mut buf_mgr = setup_bufmgr(data_dir, None);
+    let pages = buf_mgr.allocate_mem_bufs(Some(200)).unwrap();
+    assert_eq!(pages.len(), 200);
+    teardown_bufmgr(data_dir);
+}
+
 fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {
     use std::fs::{create_dir, File};
     use std::io::ErrorKind;

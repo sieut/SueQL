@@ -9,6 +9,7 @@ use std::io;
 use std::io::{Read, Seek, Write};
 use std::sync::{Arc, Mutex, RwLock};
 use storage;
+use storage::BufType;
 use storage::buf_key::BufKey;
 use storage::buf_page::BufPage;
 use utils;
@@ -144,8 +145,6 @@ impl BufMgr {
     }
 
     pub fn get_buf(&mut self, key: &BufKey) -> Result<PageLock> {
-        use storage::BufType;
-
         match &key.buf_type {
             // TODO might want to make Mem buffers retrievable
             // They are not right now because if the buffer is evicted,
@@ -173,8 +172,6 @@ impl BufMgr {
         key: &BufKey,
         info_lock: Option<std::sync::RwLockWriteGuard<BufInfo>>,
     ) -> Result<()> {
-        use storage::BufType;
-
         match self.get_item(key) {
             Some(item) => {
                 let page_lock = item.read().unwrap();
@@ -209,8 +206,6 @@ impl BufMgr {
     }
 
     pub fn new_buf(&mut self, key: &BufKey) -> Result<PageLock> {
-        use storage::BufType;
-
         match &key.buf_type {
             // Add a non-persistent buf to BufMgr if type is Mem
             &BufType::Mem => self.add_buf(BufPage::default_buf(), key),
@@ -250,7 +245,6 @@ impl BufMgr {
     }
 
     pub fn new_mem_buf(&mut self) -> Result<PageLock> {
-        use storage::BufType;
         let id = self.new_mem_id();
         self.new_buf(&BufKey::new(id, 0, BufType::Mem))
     }
@@ -266,6 +260,35 @@ impl BufMgr {
         let mut mem_cnt = self.mem_counter.lock().unwrap();
         *mem_cnt += 1;
         *mem_cnt
+    }
+
+    pub fn allocate_mem_bufs(
+        &mut self,
+        num: Option<usize>,
+    ) -> Result<Vec<PageLock>> {
+        let num = match num {
+            Some(num) => if num > self.num_available_bufs() {
+                return Err(Error::Internal(
+                    "Not enough available buffers for allocate_mem_bufs"
+                    .to_string()));
+            } else {
+                num
+            }
+            None => self.num_available_bufs() / 2,
+        };
+        let id_range = {
+            let mut mem_cnt = self.mem_counter.lock().unwrap();
+            let id_range = *mem_cnt+1..*mem_cnt+1+(num as u32);
+            *mem_cnt += num as u32;
+            id_range
+        };
+        id_range
+            .map(|id| self.new_buf(&BufKey::new(id, 0, BufType::Mem)))
+            .collect()
+    }
+
+    fn num_available_bufs(&self) -> usize {
+        *self.max_size - self.buf_table_r.len()
     }
 
     fn read_buf(&self, key: &BufKey) -> Result<Vec<u8>> {
