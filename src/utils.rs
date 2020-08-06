@@ -40,10 +40,12 @@ pub fn create_file(fname: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn file_len(fname: &str) -> Result<u64> {
-    use std::fs::metadata;
-    use std::io::ErrorKind;
+pub fn num_pages(fname: &str) -> Result<u64> {
+    use storage::PAGE_SIZE;
+    Ok(file_len(fname)? / PAGE_SIZE as u64 - 1)
+}
 
+pub fn file_len(fname: &str) -> Result<u64> {
     let file_meta = metadata(fname)?;
     if !file_meta.is_file() {
         Err(Error::from(std::io::Error::new(
