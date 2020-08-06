@@ -4,14 +4,14 @@ use exec::{DataStore, ExecNode};
 use std::sync::Arc;
 
 pub struct Projection {
-    src: Arc<ExecNode>,
+    src: Arc<dyn ExecNode>,
     dest: DataStore,
     indices: Vec<usize>,
 }
 
 impl Projection {
     pub fn new(
-        src: Arc<ExecNode>,
+        src: Arc<dyn ExecNode>,
         dest: DataStore,
         indices: Vec<usize>,
     ) -> Projection {
