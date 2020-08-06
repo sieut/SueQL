@@ -26,6 +26,22 @@ impl TupleDesc {
         }
     }
 
+    pub fn data_subset(
+        &self,
+        data: &TupleData,
+        indices: &Vec<usize>,
+    ) -> Result<TupleData> {
+        let cols = self.cols(data)?;
+        Ok(indices
+            .iter()
+            .map(|i| cols.get(*i).cloned())
+            .collect::<Option<Vec<_>>>()
+            .ok_or(Error::Internal(
+                "Invalid index for TupleDesc::data_subset".to_string()
+            ))?
+            .concat())
+    }
+
     pub fn subset(&self, indices: &Vec<usize>) -> Result<TupleDesc> {
         let attr_types = indices
             .iter()
