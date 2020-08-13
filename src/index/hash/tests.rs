@@ -15,8 +15,9 @@ fn test_insert_and_get_hash() {
     let test_buf_key = BufKey::new(0, 0, BufType::Data);
     let test_ptr = TuplePtr::new(test_buf_key.clone(), 4);
     let test_data = vec![1, 2, 3, 4];
+    let items = vec![(test_data.clone(), test_ptr.clone())];
     index
-        .insert(vec![(&test_data, test_ptr.clone())], &mut db_state)
+        .insert(&mut items.into_iter(), &mut db_state)
         .unwrap();
     let return_ptrs = index.get(&test_data, &mut db_state).unwrap();
 
@@ -63,9 +64,9 @@ fn test_split_hash() {
     assert!(bucket_one.len() > ITEMS_PER_BUCKET);
     let items = bucket_one_data
         .iter()
-        .map(|data| (data, TuplePtr::new(test_buf_key.clone(), 0)))
+        .map(|data| (data.clone(), TuplePtr::new(test_buf_key.clone(), 0)))
         .collect::<Vec<_>>();
-    index.insert(items, &mut db_state).unwrap();
+    index.insert(&mut items.clone().into_iter(), &mut db_state).unwrap();
 
     let meta_key = BufKey::new(index.file_id, 0, BufType::Data);
     let meta_page = db_state.buf_mgr.get_buf(&meta_key).unwrap();
