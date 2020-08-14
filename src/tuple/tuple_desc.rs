@@ -26,6 +26,31 @@ impl TupleDesc {
         }
     }
 
+    pub fn union(descs: Vec<TupleDesc>) -> Result<TupleDesc> {
+        use std::collections::HashMap;
+        let mut map = HashMap::new();
+        for desc in descs.iter() {
+            let iter = desc.attr_types.iter().zip(desc.attr_names.iter());
+            for (t, name) in iter {
+                if let Some(inserted_type) = map.get(name) {
+                    if inserted_type != t {
+                        return Err(
+                            Error::Internal(
+                                "Cannot union the tuple descs".to_string()));
+                    }
+                }
+                map.insert(name.clone(), t.clone());
+            }
+        }
+        let mut types = vec![];
+        let mut names = vec![];
+        for (name, t) in map.iter() {
+            types.push(t.clone());
+            names.push(name.clone());
+        }
+        Ok(TupleDesc::new(types, names))
+    }
+
     pub fn data_subset(
         &self,
         data: &TupleData,
@@ -151,5 +176,10 @@ impl TupleDesc {
         self.attr_names
             .iter()
             .position(|attr_name| attr_name == name)
+    }
+
+    pub fn attr_indices<'a, I>(&self, names: I) -> Option<Vec<usize>>
+    where I: Iterator<Item=&'a String> {
+        names.map(|name| self.attr_index(name)).collect()
     }
 }
