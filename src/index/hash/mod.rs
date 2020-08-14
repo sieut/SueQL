@@ -397,7 +397,7 @@ impl HashBucket {
         hash: u128,
         page: &BufPage,
     ) -> Result<(BufKey, Vec<HashItem>)> {
-        assert!(page.tuple_count() > 1);
+        assert!(page.tuple_count() >= 1);
         let mut iter = page.iter();
         let overflow_key: BufKey = bincode::deserialize(iter.next().unwrap())?;
         let items = iter
