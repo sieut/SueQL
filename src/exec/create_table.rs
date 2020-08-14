@@ -67,7 +67,7 @@ impl ExecNode for CreateTable {
         Ok(())
     }
 
-    fn inputs(&self) -> Vec<Arc<ExecNode>> {
+    fn inputs(&self) -> Vec<Arc<dyn ExecNode>> {
         vec![]
     }
 

@@ -4,12 +4,12 @@ use exec::{DataStore, ExecNode};
 use std::sync::Arc;
 
 pub struct Insert {
-    data: Arc<ExecNode>,
+    data: Arc<dyn ExecNode>,
     rel: DataStore,
 }
 
 impl Insert {
-    pub fn new(data: Arc<ExecNode>, rel: DataStore) -> Insert {
+    pub fn new(data: Arc<dyn ExecNode>, rel: DataStore) -> Insert {
         Insert { data, rel }
     }
 }
@@ -26,7 +26,7 @@ impl ExecNode for Insert {
         }
     }
 
-    fn inputs(&self) -> Vec<Arc<ExecNode>> {
+    fn inputs(&self) -> Vec<Arc<dyn ExecNode>> {
         vec![self.data.clone()]
     }
 

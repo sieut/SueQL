@@ -5,6 +5,6 @@ use std::sync::Arc;
 
 pub trait ExecNode {
     fn exec(&self, db_state: &mut DbState) -> Result<()>;
-    fn inputs(&self) -> Vec<Arc<ExecNode>>;
+    fn inputs(&self) -> Vec<Arc<dyn ExecNode>>;
     fn output(&self) -> DataStore;
 }

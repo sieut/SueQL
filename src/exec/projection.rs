@@ -71,7 +71,7 @@ impl ExecNode for Projection {
         }
     }
 
-    fn inputs(&self) -> Vec<Arc<ExecNode>> {
+    fn inputs(&self) -> Vec<Arc<dyn ExecNode>> {
         vec![self.src.clone()]
     }
 

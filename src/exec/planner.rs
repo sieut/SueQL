@@ -1,7 +1,6 @@
 use db_state::DbState;
 use error::Result;
 use exec::{DataStore, ExecNode};
-use exec::expr::Expr;
 use nom_sql::{
     CreateTableStatement, FieldDefinitionExpression, InsertStatement,
     SelectStatement,
