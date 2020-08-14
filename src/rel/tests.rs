@@ -108,3 +108,36 @@ fn test_new_hash_index() {
     assert_eq!(index.key_desc,
         TupleDesc::new(vec![DataType::Char], vec!["char"]));
 }
+
+#[test]
+fn test_write_with_index() {
+    use nom_sql::Literal;
+    let mut db_state = setup("test_write_with_index");
+    let desc = TupleDesc::new(
+        vec![DataType::U32, DataType::U32],
+        vec!["first", "second"],
+    );
+    let mut rel = Rel::new(
+        "test_write_with_index",
+        desc.clone(),
+        &mut db_state).unwrap();
+    let index_info = rel.new_index(vec![0], IndexType::Hash, &mut db_state).unwrap();
+    let tuples = rel
+        .literal_to_data(vec![
+            vec![Literal::Integer(1), Literal::Integer(10)],
+            vec![Literal::Integer(2), Literal::Integer(11)],
+        ])
+        .unwrap();
+    let ptrs = rel.write_tuples(tuples, &mut db_state).unwrap();
+    let index = HashIndex::load(index_info.file_id, &mut db_state).unwrap();
+    let ptr1 = index.get(&bincode::serialize(&1u32).unwrap(), &mut db_state).unwrap();
+    let ptr2 = index.get(&bincode::serialize(&2u32).unwrap(), &mut db_state).unwrap();
+    teardown(db_state);
+
+    assert_eq!(ptr1.len(), 1);
+    assert_eq!(ptr2.len(), 1);
+    let ptr1 = ptr1[0];
+    let ptr2 = ptr2[0];
+    assert_eq!(ptr1, ptrs[0]);
+    assert_eq!(ptr2, ptrs[1]);
+}
