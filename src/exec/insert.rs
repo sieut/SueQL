@@ -19,7 +19,7 @@ impl ExecNode for Insert {
         match (self.data.output(), self.output()) {
             (DataStore::Data { tuples, desc }, DataStore::Rel(rel)) => {
                 assert_eq!(desc.attr_types(), rel.tuple_desc().attr_types());
-                rel.write_tuples(tuples, db_state)?;
+                rel.write_tuples(&mut tuples.into_iter(), db_state)?;
                 Ok(())
             }
             _ => Ok(()),

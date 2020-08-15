@@ -84,7 +84,7 @@ impl Rel {
         let new_entry = table_rel
             .tuple_desc
             .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
-        table_rel.write_tuples(vec![new_entry], db_state)?;
+        table_rel.write_tuples(&mut vec![new_entry].into_iter(), db_state)?;
 
         Ok(rel)
     }
@@ -122,13 +122,10 @@ impl Rel {
 
     pub fn write_tuples(
         &self,
-        mut tuples: Vec<TupleData>,
+        // mut tuples: Vec<TupleData>,
+        tuples: &mut dyn Iterator<Item=TupleData>,
         db_state: &mut DbState,
     ) -> Result<Vec<TuplePtr>> {
-        for tup in tuples.iter() {
-            self.tuple_desc.assert_data_len(&tup)?;
-        }
-
         let meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let rel_lock = meta.write().unwrap();
 
@@ -140,33 +137,32 @@ impl Rel {
 
         let mut page_key = self.last_buf_key(&mut db_state.buf_mgr)?;
         let mut result = vec![];
-        tuples.reverse();
-
+        let mut tup = match tuples.next() {
+            Some(tup) => tup,
+            None => return Ok(result)
+        };
         loop {
             let page = db_state.buf_mgr.get_buf(&page_key)?;
             let mut guard = page.write().unwrap();
-
             loop {
-                match tuples.pop() {
-                    Some(tup) => {
-                        if guard.available_data_space() < tup.len() {
-                            page_key = page_key.inc_offset();
-                            tuples.push(tup);
-                            break;
-                        }
-                        let ptr = self.write_tuple(
-                            &tup, &mut guard, db_state)?;
-                        self.handle_index_item(
-                            &tup, &ptr, &index_writer_info, &mut mem_guard,
-                            db_state)?;
-                        result.push(ptr);
-                    }
+                if guard.available_data_space() < tup.len() {
+                    page_key = page_key.inc_offset();
+                    break;
+                }
+                let ptr = self.write_tuple(
+                    &tup, &mut guard, db_state)?;
+                self.handle_index_item(
+                    &tup, &ptr, &index_writer_info, &mut mem_guard,
+                    db_state)?;
+                result.push(ptr);
+                tup = match tuples.next() {
+                    Some(tup) => tup,
                     None => {
                         index_writer_info.write_items(
                             &mut mem_guard, None, db_state)?;
                         return Ok(result);
                     }
-                }
+                };
             }
         }
     }

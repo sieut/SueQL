@@ -44,7 +44,8 @@ fn test_write_tuple() {
             Literal::Integer(1),
         ]])
         .unwrap();
-    let ptrs = rel.write_tuples(tuples.clone(), &mut db_state).unwrap();
+    let ptrs = rel.write_tuples(
+        &mut tuples.clone().into_iter(), &mut db_state).unwrap();
     assert_eq!(ptrs.len(), 1);
     let ptr = ptrs.get(0).unwrap();
 
@@ -128,7 +129,8 @@ fn test_write_with_index() {
             vec![Literal::Integer(2), Literal::Integer(11)],
         ])
         .unwrap();
-    let ptrs = rel.write_tuples(tuples, &mut db_state).unwrap();
+    let ptrs = rel.write_tuples(
+        &mut tuples.into_iter(), &mut db_state).unwrap();
     let index = HashIndex::load(index_info.file_id, &mut db_state).unwrap();
     let ptr1 = index.get(&bincode::serialize(&1u32).unwrap(), &mut db_state).unwrap();
     let ptr2 = index.get(&bincode::serialize(&2u32).unwrap(), &mut db_state).unwrap();

@@ -119,7 +119,7 @@ fn test_recovery() {
             vec![Literal::String("b".to_string()), Literal::Integer(2)],
         ])
         .unwrap();
-    rel.write_tuples(tuples, &mut db_state).unwrap();
+    rel.write_tuples(&mut tuples.into_iter(), &mut db_state).unwrap();
 
     // Restart db, basically
     let mut db_state = setup_no_persist(data_dir);
