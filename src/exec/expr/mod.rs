@@ -8,19 +8,12 @@ use nom_sql::{
 };
 use std::cmp::{Ord, Ordering};
 use std::ops::{Add, Div, Mul, Sub};
+use index::IndexType;
 use tuple::TupleDesc;
+use rel::Rel;
 
-#[macro_use]
-macro_rules! chain_dependencies {
-    ($left:expr, $right:expr) => {
-        $left
-            .dependencies
-            .iter()
-            .chain($right.dependencies.iter())
-            .cloned()
-            .collect::<Vec<_>>()
-    };
-}
+#[cfg(test)]
+mod tests;
 
 #[macro_use]
 macro_rules! arithmetic_op {
@@ -35,7 +28,6 @@ macro_rules! arithmetic_op {
 macro_rules! arithmetic_expr {
     ($left:expr, $right:expr, $op:ident) => {
         Expr {
-            dependencies: chain_dependencies!($left, $right),
             output_type: $left.output_type,
             function: Box::new(move |bytes| {
                 match (&$left.output_type, &$right.output_type) {
@@ -69,7 +61,6 @@ macro_rules! cmp_op {
 macro_rules! cmp_expr {
     ($left:expr, $right:expr, $ord:pat) => {
         Expr {
-            dependencies: chain_dependencies!($left, $right),
             output_type: DataType::Bool,
             function: Box::new(move |bytes| {
                 match (&$left.output_type, &$right.output_type) {
@@ -103,13 +94,12 @@ macro_rules! cmp_expr {
 }
 
 pub struct Expr {
-    pub dependencies: Vec<ExprDependency>,
-    pub function: Box<Fn(&[u8]) -> Result<TupleData>>,
+    pub function: Box<dyn Fn(&[u8]) -> Result<TupleData>>,
     pub output_type: DataType,
 }
 
 impl Expr {
-    pub fn from_nom<E>(nom: E, desc: Option<&TupleDesc>) -> Result<Expr>
+    pub fn from_nom<E>(nom: E, rel: &Rel) -> Result<Expr>
     where
         E: Into<NomExpr>,
     {
@@ -118,11 +108,10 @@ impl Expr {
 
         match nom {
             NomExpr::ConditionTree(expr) => {
-                let left = Expr::from_nom((*expr.left).clone(), desc)?;
-                let right = Expr::from_nom((*expr.right).clone(), desc)?;
-
+                let indices = rel.indices();
+                let left = Expr::from_nom((*expr.left).clone(), rel)?;
+                let right = Expr::from_nom((*expr.right).clone(), rel)?;
                 let (left, right) = Expr::try_match_type(left, right)?;
-
                 match expr.operator {
                     Operator::Equal => {
                         Ok(cmp_expr!(left, right, Ordering::Equal))
@@ -134,41 +123,41 @@ impl Expr {
                     _ => Err(not_impl),
                 }
             }
+
             NomExpr::ConditionExpression(expr) => match expr {
                 ConditionExpression::ComparisonOp(expr) => {
-                    Expr::from_nom(expr, desc)
+                    Expr::from_nom(expr, rel)
                 }
                 ConditionExpression::LogicalOp(expr) => {
-                    Expr::from_nom(expr, desc)
+                    Expr::from_nom(expr, rel)
                 }
                 ConditionExpression::NegationOp(expr) => {
-                    Expr::from_nom((*expr).clone(), desc)
+                    Expr::from_nom((*expr).clone(), rel)
                 }
-                ConditionExpression::Base(expr) => Expr::from_nom(expr, desc),
+                ConditionExpression::Base(expr) => Expr::from_nom(expr, rel),
                 ConditionExpression::Arithmetic(expr) => {
-                    Expr::from_nom((*expr).clone(), desc)
+                    Expr::from_nom((*expr).clone(), rel)
                 }
                 ConditionExpression::Bracketed(expr) => {
-                    Expr::from_nom((*expr).clone(), desc)
+                    Expr::from_nom((*expr).clone(), rel)
                 }
-            },
+            }
+
             NomExpr::ConditionBase(expr) => match expr {
-                ConditionBase::Field(col) => Expr::from_col(col, desc),
+                ConditionBase::Field(col) => Expr::from_col(col, rel.tuple_desc()),
                 ConditionBase::Literal(literal) => Expr::from_literal(literal),
                 _ => Err(not_impl),
-            },
-            NomExpr::ArithmeticExpression(expr) => {
-                let left = Expr::from_nom(expr.left.clone(), desc)?;
-                let right = Expr::from_nom(expr.right.clone(), desc)?;
+            }
 
+            NomExpr::ArithmeticExpression(expr) => {
+                let left = Expr::from_nom(expr.left.clone(), rel)?;
+                let right = Expr::from_nom(expr.right.clone(), rel)?;
                 if !left.output_type.is_numerical()
                     || !right.output_type.is_numerical()
                 {
                     return Err(Error::internal("Arithmetic expression must be between 2 numerical types"));
                 }
-
                 let (left, right) = Expr::match_numerical_type(left, right)?;
-
                 match expr.op {
                     ArithmeticOperator::Add => {
                         Ok(arithmetic_expr!(left, right, add))
@@ -184,48 +173,39 @@ impl Expr {
                     }
                 }
             }
+
             NomExpr::ArithmeticBase(expr) => match expr {
-                ArithmeticBase::Column(col) => Expr::from_col(col, desc),
+                ArithmeticBase::Column(col) => Expr::from_col(col, rel.tuple_desc()),
                 ArithmeticBase::Scalar(literal) => Expr::from_literal(literal),
-            },
+            }
+
         }
     }
 
-    fn from_col(col: Column, desc: Option<&TupleDesc>) -> Result<Expr> {
-        match desc {
-            Some(desc) => {
-                let desc = desc.clone();
-                match desc.attr_index(&col.name) {
-                    Some(idx) => {
-                        let output_type = desc.attr_types()[idx].clone();
-                        let function = Box::new(move |bytes: &[u8]| {
-                            Ok(desc.cols(bytes)?[idx].clone())
-                        });
-                        Ok(Expr {
-                            dependencies: vec![ExprDependency::Column(col)],
-                            function,
-                            output_type,
-                        })
-                    }
-                    None => Err(Error::internal(format!(
-                        "Invalid column {}",
-                        col.name
-                    ))),
-                }
+    fn from_col(col: Column, desc: TupleDesc) -> Result<Expr> {
+        match desc.attr_index(&col.name) {
+            Some(idx) => {
+                let output_type = desc.attr_types()[idx].clone();
+                let function = Box::new(move |bytes: &[u8]| {
+                    Ok(desc.cols(bytes)?[idx].clone())
+                });
+                Ok(Expr {
+                    function,
+                    output_type,
+                })
             }
-            None => Err(Error::internal(
-                "For a Column expr, a TupleDesc must be provided",
-            )),
+            None => Err(Error::internal(format!(
+                "Invalid column {}",
+                col.name
+            ))),
         }
     }
 
     fn from_literal(literal: Literal) -> Result<Expr> {
-        let dependencies = vec![ExprDependency::Literal(literal.clone())];
         match literal {
             Literal::Integer(int) => {
                 let data = bincode::serialize(&int)?;
                 Ok(Expr {
-                    dependencies,
                     function: Box::new(move |_| Ok(data.clone())),
                     output_type: DataType::I64,
                 })
@@ -233,12 +213,80 @@ impl Expr {
             Literal::String(string) => {
                 let data = bincode::serialize(&string)?;
                 Ok(Expr {
-                    dependencies,
                     function: Box::new(move |_| Ok(data.clone())),
                     output_type: DataType::VarChar,
                 })
             }
             _ => Err(Error::internal("Literal type not supported yet")),
+        }
+    }
+
+    pub fn is_only_col<E>(nom: E, rel: &Rel) -> Option<usize>
+    where
+        E: Into<NomExpr>,
+    {
+        let nom: NomExpr = nom.into();
+        match nom {
+            NomExpr::ConditionExpression(expr) => match expr {
+                ConditionExpression::Base(expr) => Expr::is_only_col(expr, rel),
+                _ => None
+            }
+
+            NomExpr::ConditionBase(expr) => match expr {
+                ConditionBase::Field(col) => {
+                    rel.tuple_desc().attr_index(&col.name)
+                }
+                _ => None
+            }
+
+            _ => None
+        }
+    }
+
+    pub fn is_no_col<E>(nom: E) -> bool
+    where
+        E: Into<NomExpr>,
+    {
+        let nom: NomExpr = nom.into();
+        match nom {
+            NomExpr::ConditionTree(expr) => {
+                Expr::is_no_col((*expr.left).clone()) &&
+                    Expr::is_no_col((*expr.right).clone())
+            }
+
+            NomExpr::ConditionExpression(expr) => match expr {
+                ConditionExpression::ComparisonOp(expr) => {
+                    Expr::is_no_col(expr)
+                }
+                ConditionExpression::LogicalOp(expr) => {
+                    Expr::is_no_col(expr)
+                }
+                ConditionExpression::NegationOp(expr) => {
+                    Expr::is_no_col((*expr).clone())
+                }
+                ConditionExpression::Base(expr) => Expr::is_no_col(expr),
+                ConditionExpression::Arithmetic(expr) => {
+                    Expr::is_no_col((*expr).clone())
+                }
+                ConditionExpression::Bracketed(expr) => {
+                    Expr::is_no_col((*expr).clone())
+                }
+            }
+
+            NomExpr::ConditionBase(expr) => match expr {
+                ConditionBase::Field(_) => false,
+                _ => true,
+            }
+
+            NomExpr::ArithmeticExpression(expr) => {
+                Expr::is_no_col(expr.left.clone()) &&
+                    Expr::is_no_col(expr.right.clone())
+            }
+
+            NomExpr::ArithmeticBase(expr) => match expr {
+                ArithmeticBase::Column(_) => false,
+                _ => true,
+            }
         }
     }
 
@@ -250,7 +298,6 @@ impl Expr {
             )))
         } else {
             Ok(Expr {
-                dependencies: self.dependencies.clone(),
                 output_type: DataType::Bool,
                 function: Box::new(move |bytes| {
                     let mut value: u8 =
@@ -316,7 +363,6 @@ impl Expr {
 
         if self.output_type.is_numerical() && to.is_numerical() {
             return Ok(Expr {
-                dependencies: self.dependencies.clone(),
                 output_type: to,
                 function: Box::new(move |bytes| {
                     let mut output = (self.function)(bytes)?;
@@ -334,7 +380,6 @@ impl Expr {
 
         match (&self.output_type, &to) {
             (_, &DataType::VarChar) => Ok(Expr {
-                dependencies: self.dependencies.clone(),
                 output_type: to,
                 function: Box::new(move |bytes| {
                     let output = (self.function)(bytes)?;
@@ -345,7 +390,6 @@ impl Expr {
             }),
             (&DataType::Char, &DataType::Bool)
             | (&DataType::Bool, &DataType::Char) => Ok(Expr {
-                dependencies: self.dependencies.clone(),
                 output_type: to,
                 function: self.function,
             }),
@@ -354,6 +398,7 @@ impl Expr {
     }
 }
 
+#[derive(Debug)]
 pub enum NomExpr {
     ConditionTree(ConditionTree),
     ConditionExpression(ConditionExpression),
@@ -378,9 +423,3 @@ impl_from_for_nomexpr!(ConditionExpression);
 impl_from_for_nomexpr!(ConditionBase);
 impl_from_for_nomexpr!(ArithmeticExpression);
 impl_from_for_nomexpr!(ArithmeticBase);
-
-#[derive(Clone, Debug)]
-pub enum ExprDependency {
-    Column(Column),
-    Literal(Literal),
-}

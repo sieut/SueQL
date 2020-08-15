@@ -5,8 +5,6 @@ pub mod expr;
 pub mod insert;
 mod planner;
 pub mod projection;
-#[cfg(test)]
-mod tests;
 
 pub use self::create_table::CreateTable;
 pub use self::data_store::DataStore;
