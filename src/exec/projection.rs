@@ -25,7 +25,6 @@ impl ExecNode for Projection {
 
         match (self.src.output(), self.output()) {
             (DataStore::Rel(input), DataStore::Rel(output)) => {
-                rel_write_lock!(output, db_state.buf_mgr);
                 let buf = db_state.buf_mgr.new_mem_buf()?;
                 let mut buf_guard = buf.write().unwrap();
 
@@ -42,10 +41,13 @@ impl ExecNode for Projection {
                         let projected = cols.concat();
 
                         if buf_guard.available_data_space() < projected.len() {
-                            output.append_page(&buf_guard, db_state)?;
+                            let mut iter = buf_guard
+                                .iter()
+                                .map(|slice| slice.to_vec())
+                                .chain(vec![projected].into_iter());
+                            output.write_tuples(&mut iter, db_state)?;
                             buf_guard.clear();
                         }
-                        buf_guard.write_tuple_data(&projected, None, None)?;
                         Ok(())
                     },
                 )?;

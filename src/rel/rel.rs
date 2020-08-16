@@ -11,22 +11,6 @@ use storage::{BufKey, BufMgr, BufPage, BufType};
 use tuple::{TupleDesc, TuplePtr};
 use utils;
 
-#[macro_use]
-macro_rules! rel_read_lock {
-    ($rel:ident, $buf_mgr:expr) => {
-        let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
-        let _guard = _meta.read().unwrap();
-    };
-}
-
-#[macro_use]
-macro_rules! rel_write_lock {
-    ($rel:ident, $buf_mgr:expr) => {
-        let _meta = $buf_mgr.get_buf(&$rel.meta_buf_key())?;
-        let _guard = _meta.write().unwrap();
-    };
-}
-
 /// Represent a Relation on disk:
 ///     - First page of file is metadata of the relation
 #[derive(Clone, Debug)]
@@ -122,7 +106,6 @@ impl Rel {
 
     pub fn write_tuples(
         &self,
-        // mut tuples: Vec<TupleData>,
         tuples: &mut dyn Iterator<Item=TupleData>,
         db_state: &mut DbState,
     ) -> Result<Vec<TuplePtr>> {
@@ -202,21 +185,6 @@ impl Rel {
         Ok(())
     }
 
-    /// Write a new page at the end of Rel's file.
-    /// Must hold Rel's write lock before calling.
-    // TODO make this an Op for logging
-    pub fn append_page(
-        &self,
-        page: &BufPage,
-        db_state: &mut DbState,
-    ) -> Result<()> {
-        let last_buf_key = self.last_buf_key(&mut db_state.buf_mgr)?;
-        let new_page = db_state.buf_mgr.new_buf(&last_buf_key.inc_offset())?;
-        let mut page_guard = new_page.write().unwrap();
-        page_guard.clone_from(page);
-        Ok(())
-    }
-
     pub fn new_index(
         &mut self,
         key: Vec<usize>,
@@ -277,7 +245,8 @@ impl Rel {
         Then: FnMut(&[u8], &mut DbState) -> Result<()>,
     {
         // TODO update scan after BufMgr bulk load is added
-        rel_read_lock!(self, db_state.buf_mgr);
+        let meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
+        let _meta_guard = meta.read().unwrap();
 
         for page_idx in 1..self.num_pages(&mut db_state.buf_mgr)? + 1 {
             let page = db_state.buf_mgr.get_buf(&BufKey::new(

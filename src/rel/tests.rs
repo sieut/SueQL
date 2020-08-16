@@ -1,5 +1,4 @@
 use data_type::DataType;
-use error::Result;
 use index::{Index, HashIndex, IndexType};
 use super::Rel;
 use storage::BufType;
@@ -62,30 +61,6 @@ fn test_write_tuple() {
 
     assert_eq!(tuples[0], written_tuple);
     assert!(lsn != 0);
-}
-
-#[test]
-fn test_rel_lock_macro() -> Result<()> {
-    let mut db_state = setup_no_persist("test_rel_lock_macro");
-
-    let desc = TupleDesc::new(
-        vec![DataType::Char, DataType::U32],
-        vec!["char", "u32"],
-    );
-    let rel1 =
-        Rel::new("test_rel_lock_macro_1", desc.clone(), &mut db_state).unwrap();
-    let rel2 =
-        Rel::new("test_rel_lock_macro_2", desc.clone(), &mut db_state).unwrap();
-
-    {
-        rel_read_lock!(rel1, db_state.buf_mgr);
-        rel_write_lock!(rel2, db_state.buf_mgr);
-        let rel1_meta = db_state.buf_mgr.get_buf(&rel1.meta_buf_key())?;
-        assert!(rel1_meta.try_write().is_err());
-    }
-
-    teardown(db_state);
-    Ok(())
 }
 
 #[test]
