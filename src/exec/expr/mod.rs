@@ -354,7 +354,7 @@ impl Expr {
         }
     }
 
-    fn cast(self, to: DataType) -> Result<Expr> {
+    pub fn cast(self, to: DataType) -> Result<Expr> {
         if self.output_type == to {
             return Ok(self);
         }

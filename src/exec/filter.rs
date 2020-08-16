@@ -70,9 +70,12 @@ impl Filter {
         if let ConditionExpression::ComparisonOp(ref tree) = self.clause {
             if let Operator::Equal = tree.operator {
                 if Expr::is_no_col((*tree.right).clone()) {
-                    let expr = Expr::from_nom(
-                        (*tree.right).clone(), &self.data)?;
-                    return (expr.function)(&vec![]);
+                    let left = Expr::from_nom(
+                        (*tree.left).clone(), &self.data)?;
+                    let right = Expr::from_nom(
+                        (*tree.right).clone(), &self.data)?
+                        .cast(left.output_type)?;
+                    return (right.function)(&vec![]);
                 }
                 return err;
             }
