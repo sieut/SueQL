@@ -26,8 +26,8 @@ mod tuple;
 
 use db_state::{DbSettings, DbState};
 
-fn main() {
-    let mut db_state = DbState::start_db(DbSettings::default()).unwrap();
+fn main() -> error::Result<()> {
+    let mut db_state = DbState::start_db(DbSettings::default())?;
 
     let mut query = String::from("");
     loop {
@@ -40,7 +40,7 @@ fn main() {
                 if input.find(';').is_some() {
                     match nom_sql::parse_query(&query) {
                         Ok(query) => {
-                            exec::exec(query, &mut db_state).unwrap();
+                            exec::exec(query, &mut db_state)?;
                         }
                         Err(e) => {
                             println!("{}", e);
@@ -50,9 +50,10 @@ fn main() {
                 }
             }
             None => {
-                db_state.shutdown().unwrap();
+                db_state.shutdown()?;
                 break;
             }
         };
-    }
+    };
+    Ok(())
 }
