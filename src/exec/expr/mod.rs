@@ -8,7 +8,6 @@ use nom_sql::{
 };
 use std::cmp::{Ord, Ordering};
 use std::ops::{Add, Div, Mul, Sub};
-use index::IndexType;
 use tuple::TupleDesc;
 use rel::Rel;
 
@@ -108,7 +107,6 @@ impl Expr {
 
         match nom {
             NomExpr::ConditionTree(expr) => {
-                let indices = rel.indices();
                 let left = Expr::from_nom((*expr.left).clone(), rel)?;
                 let right = Expr::from_nom((*expr.right).clone(), rel)?;
                 let (left, right) = Expr::try_match_type(left, right)?;
