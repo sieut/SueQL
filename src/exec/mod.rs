@@ -2,6 +2,7 @@ pub mod create_table;
 pub mod data_store;
 pub mod exec_node;
 pub mod expr;
+pub mod filter;
 pub mod insert;
 mod planner;
 pub mod projection;
@@ -10,6 +11,7 @@ pub use self::create_table::CreateTable;
 pub use self::data_store::DataStore;
 pub use self::exec_node::ExecNode;
 pub use self::expr::Expr;
+pub use self::filter::Filter;
 pub use self::insert::Insert;
 pub use self::projection::Projection;
 

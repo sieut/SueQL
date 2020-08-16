@@ -40,21 +40,28 @@ pub fn plan_select(
     stmt: SelectStatement,
     db_state: &mut DbState,
 ) -> Result<Option<Box<dyn ExecNode>>> {
-    use exec::Projection;
+    use super::{Filter, Projection};
 
     let rel_id = match stmt.tables.len() {
         1 => utils::get_table_id(stmt.tables[0].name.clone(), db_state)?,
-        // Join is not supported yet
-        _ => {
-            return Ok(None);
-        }
+        _ => todo!("Join is not supported yet"),
     };
 
     let rel = Rel::load(rel_id, BufType::Data, db_state)?;
     let fields = build_select_fields(&stmt.fields, rel.tuple_desc());
-
+    let projection_src = match stmt.where_clause {
+        Some(clause) => {
+            let temp_rel = Rel::new_temp_rel(rel.tuple_desc(), db_state)?;
+            Arc::new(
+                Filter::new(
+                    rel,
+                    DataStore::Rel(temp_rel),
+                    clause)) as Arc<dyn ExecNode>
+        }
+        None => Arc::new(DataStore::Rel(rel)),
+    };
     Ok(Some(Box::new(Projection::new(
-        Arc::new(DataStore::Rel(rel)),
+        projection_src,
         DataStore::Out,
         fields,
     ))))
