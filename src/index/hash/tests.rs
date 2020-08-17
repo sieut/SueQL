@@ -117,8 +117,8 @@ fn test_split_hash() {
 fn test_insert_and_get_bucket() {
     let mut db_state = setup("test_insert_to_bucket");
 
-    let bucket_file_id = db_state.meta.get_new_id().unwrap();
-    let overflow_file_id = db_state.meta.get_new_id().unwrap();
+    let bucket_file_id = db_state.meta.get_new_id();
+    let overflow_file_id = db_state.meta.get_new_id();
     let _ = db_state.buf_mgr.new_buf(
         &BufKey::new(overflow_file_id, 0, BufType::Data),
     ).unwrap();

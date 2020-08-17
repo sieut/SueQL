@@ -3,6 +3,7 @@ use error::{Error, Result};
 use evmap;
 use internal_types::ID;
 use log::LogMgr;
+use meta::Meta;
 use std::collections::VecDeque;
 use std::fs;
 use std::io;
@@ -131,11 +132,12 @@ impl BufMgr {
         }
     }
 
-    pub fn start_persist(&self, log_mgr: &LogMgr) -> Result<()> {
+    pub fn start_persist(&self, meta: &Meta, log_mgr: &LogMgr) -> Result<()> {
         let buf_mgr_clone = self.clone();
+        let meta_clone = meta.clone();
         let log_mgr_clone = log_mgr.clone();
         std::thread::spawn(move || {
-            buf_mgr_clone.persist_loop(log_mgr_clone);
+            buf_mgr_clone.persist_loop(meta_clone, log_mgr_clone);
         });
         Ok(())
     }
@@ -373,10 +375,15 @@ impl BufMgr {
         self.data_dir.to_string()
     }
 
-    fn persist_loop(mut self, mut log_mgr: LogMgr) {
+    fn persist_loop(mut self, meta: Meta, mut log_mgr: LogMgr) {
         use std::{thread, time};
         loop {
             thread::sleep(time::Duration::from_millis(200));
+
+            match meta.persist_counters() {
+                Ok(()) => {},
+                Err(e) => panic!("Persisting counters failed\nError: {:?}", e),
+            };
 
             let cp_ptr = match log_mgr.create_checkpoint(&mut self) {
                 Ok(ptr) => ptr,

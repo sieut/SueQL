@@ -18,7 +18,7 @@ impl LogEntry {
         data: TupleData,
         db_state: &mut DbState,
     ) -> Result<LogEntry> {
-        let lsn = db_state.meta.get_new_lsn()?;
+        let lsn = db_state.meta.get_new_lsn();
         let header = LogHeader::new(lsn, buf_key, op);
         Ok(LogEntry { header, data })
     }

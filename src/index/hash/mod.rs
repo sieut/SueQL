@@ -84,8 +84,8 @@ impl HashIndex {
         key_desc: TupleDesc,
         db_state: &mut DbState,
     ) -> Result<HashIndex> {
-        let file_id = db_state.meta.get_new_id()?;
-        let overflow_file_id = db_state.meta.get_new_id()?;
+        let file_id = db_state.meta.get_new_id();
+        let overflow_file_id = db_state.meta.get_new_id();
         let index = HashIndex {
             file_id,
             rel_id,

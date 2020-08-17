@@ -23,7 +23,7 @@ impl DbState {
         let meta = Meta::create_and_load(&mut buf_mgr)?;
         meta.set_state(State::Up)?;
 
-        buf_mgr.start_persist(&log_mgr)?;
+        buf_mgr.start_persist(&meta, &log_mgr)?;
 
         Ok(DbState {
             buf_mgr,

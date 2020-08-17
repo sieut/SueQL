@@ -54,7 +54,7 @@ impl Rel {
         tuple_desc: TupleDesc,
         db_state: &mut DbState,
     ) -> Result<Rel> {
-        let rel_id = db_state.meta.get_new_id()?;
+        let rel_id = db_state.meta.get_new_id();
         let rel = Rel {
             rel_id,
             tuple_desc,
