@@ -4,7 +4,6 @@ use error::Result;
 use index::{HashIndex, Index, IndexType};
 use internal_types::{TupleData, ID, LSN};
 use log::{LogEntry, OpType};
-use meta;
 use nom_sql::Literal;
 use serde::{Deserialize, Serialize};
 use storage::{BufKey, BufMgr, BufPage, BufType};
@@ -61,15 +60,14 @@ impl Rel {
             buf_type: BufType::Data,
             indices: vec![],
         };
-
         Rel::write_new_rel(&mut db_state.buf_mgr, &rel)?;
-        // Add an entry to the table info rel
-        let table_rel = Rel::load(meta::TABLE_REL_ID, BufType::Data, db_state)?;
-        let new_entry = table_rel
-            .tuple_desc
-            .create_tuple_data(vec![name.into(), rel.rel_id.to_string()]);
-        table_rel.write_tuples(&mut vec![new_entry].into_iter(), db_state)?;
-
+        // Add an entry to the table index
+        let entry = (
+            bincode::serialize(&name.into())?,
+            TuplePtr::new(rel.meta_buf_key(), 0));
+        let index = db_state.meta.table_index.clone();
+        index.insert(
+            &mut vec![entry].into_iter(), db_state)?;
         Ok(rel)
     }
 

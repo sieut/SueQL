@@ -2,8 +2,8 @@ use bincode;
 use data_type::DataType;
 use db_state::State;
 use error::Result;
+use index::HashIndex;
 use internal_types::{ID, LSN};
-use rel::Rel;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use storage::buf_mgr::PageLock;
@@ -15,8 +15,10 @@ use utils;
 pub static META_REL_ID: ID = 0;
 pub static META_BUF_KEY: BufKey = BufKey::new(META_REL_ID, 0, BufType::Data);
 pub static TABLE_REL_ID: ID = 1;
+pub static TABLE_OVERFLOW_ID: ID = 2;
 pub static TABLE_BUF_KEY: BufKey = BufKey::new(TABLE_REL_ID, 0, BufType::Data);
-static DEFAULT_ID: ID = 3;
+static DEFAULT_ID: ID = 4;
+static DEFAULT_LSN: LSN = 1;
 static STATE_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 0);
 static CUR_ID_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 1);
 static CUR_LSN_PTR: TuplePtr = TuplePtr::new(META_BUF_KEY, 2);
@@ -27,6 +29,7 @@ pub struct Meta {
     buf: PageLock,
     cur_id: Arc<AtomicU32>,
     cur_lsn: Arc<AtomicU32>,
+    pub table_index: HashIndex,
 }
 
 impl Meta {
@@ -55,8 +58,14 @@ impl Meta {
         utils::assert_data_len(&lsn_data, 4)?;
         let cur_lsn = Arc::new(
             AtomicU32::new(bincode::deserialize(&lsn_data)?));
+        let table_index = HashIndex {
+            file_id: TABLE_REL_ID,
+            overflow_file_id: TABLE_OVERFLOW_ID,
+            key_desc: table_rel_desc(),
+            rel_id: 0,
+        };
 
-        Ok(Meta { buf: buf.clone(), cur_id, cur_lsn })
+        Ok(Meta { buf: buf.clone(), cur_id, cur_lsn, table_index })
     }
 
     pub fn new(buf_mgr: &mut BufMgr) -> Result<Meta> {
@@ -65,17 +74,23 @@ impl Meta {
         // State
         let state_data = bincode::serialize(&State::Down)?;
         guard.write_tuple_data(&state_data, None, None)?;
+        // TODO ID and LSN counter will be corrupted when the db crashes
+        // The recovery process should update ID and LSN based on the op.
         // ID Counter
-        guard.write_tuple_data(&bincode::serialize(&DEFAULT_ID)?, None, None)?;
+        guard.write_tuple_data(
+            &bincode::serialize(&DEFAULT_ID)?, None, None)?;
         // LSN Counter
-        guard.write_tuple_data(&[0u8; 4], None, None)?;
-
-        Rel::new_meta_rel(TABLE_REL_ID, table_rel_desc(), buf_mgr)?;
+        guard.write_tuple_data(
+            &bincode::serialize(&DEFAULT_LSN)?, None, None)?;
+        // Table name hash index
+        let table_index = HashIndex::new_meta(
+            TABLE_REL_ID, TABLE_OVERFLOW_ID, table_rel_desc(), buf_mgr)?;
 
         Ok(Meta {
             buf: buf.clone(),
             cur_id: Arc::new(AtomicU32::new(DEFAULT_ID)),
-            cur_lsn: Arc::new(AtomicU32::new(0)),
+            cur_lsn: Arc::new(AtomicU32::new(DEFAULT_LSN)),
+            table_index,
         })
     }
 
@@ -116,7 +131,7 @@ impl Meta {
 // TODO is there a way for this to be a const fn?
 fn table_rel_desc() -> TupleDesc {
     TupleDesc::new(
-        vec![DataType::VarChar, DataType::U32],
-        vec![String::from("table_name"), String::from("rel_id")],
+        vec![DataType::VarChar],
+        vec![String::from("table_name")],
     )
 }

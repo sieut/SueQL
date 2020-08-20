@@ -125,7 +125,7 @@ fn test_insert_and_get_bucket() {
     let bucket = HashBucket::new(
         BufKey::new(bucket_file_id, 0, BufType::Data),
         overflow_file_id,
-        &mut db_state,
+        &mut db_state.buf_mgr,
     ).unwrap();
     let items = (0..ITEMS_PER_BUCKET * 3)
         .map(|_| HashItem {

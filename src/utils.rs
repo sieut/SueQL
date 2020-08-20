@@ -1,8 +1,7 @@
 use db_state::DbState;
 use error::{Error, Result};
+use index::Index;
 use internal_types::ID;
-use meta::TABLE_REL_ID;
-use rel::Rel;
 use std::fs::{File, metadata};
 use std::io::{Write, ErrorKind};
 
@@ -58,20 +57,12 @@ pub fn file_len(fname: &str) -> Result<u64> {
 }
 
 pub fn get_table_id(name: String, db_state: &mut DbState) -> Result<ID> {
-    use storage::BufType;
-
-    let rel = Rel::load(TABLE_REL_ID, BufType::Data, db_state)?;
-    let mut id = String::from("");
-    rel.scan(
-        db_state,
-        |data| {
-            let vals = rel.data_to_strings(data, None).unwrap();
-            Ok(vals[0].clone() == name)
-        },
-        |data, _db_state| {
-            id = rel.data_to_strings(data, None).unwrap()[1].clone();
-            Ok(())
-        },
-    )?;
-    Ok(id.parse::<ID>().unwrap())
+    let index = db_state.meta.table_index.clone();
+    let ptrs = index.get(&bincode::serialize(&name)?, db_state)?;
+    match ptrs.len() {
+        1 => {
+            Ok(ptrs[0].buf_key.file_id)
+        }
+        _ => Err(Error::Internal("Invalid table name".to_string())),
+    }
 }

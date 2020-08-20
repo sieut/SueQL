@@ -7,7 +7,7 @@ use storage::buf_mgr::PageLock;
 use storage::{BufKey, BufMgr, BufType};
 use tuple::TuplePtr;
 
-pub static LOG_REL_ID: ID = 2;
+pub static LOG_REL_ID: ID = 3;
 static LOG_META_KEY: BufKey = BufKey::new(LOG_REL_ID, 0, BufType::Data);
 static LAST_CP_PTR: TuplePtr = TuplePtr::new(LOG_META_KEY, 0);
 

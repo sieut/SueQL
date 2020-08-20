@@ -3,7 +3,7 @@ use db_state::DbState;
 use error::{Error, Result};
 use internal_types::{TupleData, ID};
 use serde::{Deserialize, Serialize};
-use storage::{BufKey, BufPage, BufType};
+use storage::{BufMgr, BufKey, BufPage, BufType};
 use super::Index;
 use tuple::{TupleDesc, TuplePtr};
 use utils;
@@ -16,7 +16,7 @@ const INIT_N: u64 = 2;
 const ITEMS_PER_BUCKET: usize = 90;
 const METADATA_ITEMS: usize = 5;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HashIndex {
     pub file_id: ID,
     pub rel_id: ID,
@@ -92,41 +92,60 @@ impl HashIndex {
             key_desc,
             overflow_file_id,
         };
+        index.write_new(&mut db_state.buf_mgr)?;
+        Ok(index)
+    }
 
-        let meta_page = db_state.buf_mgr.new_buf(&index.meta_key())?;
+    pub fn new_meta(
+        file_id: ID,
+        overflow_file_id: ID,
+        key_desc: TupleDesc,
+        buf_mgr: &mut BufMgr,
+    ) -> Result<HashIndex> {
+        let index = HashIndex {
+            file_id,
+            overflow_file_id,
+            key_desc,
+            rel_id: 0,
+        };
+        index.write_new(buf_mgr)?;
+        Ok(index)
+    }
+
+    fn write_new(&self, buf_mgr: &mut BufMgr) -> Result<()> {
+        let meta_page = buf_mgr.new_buf(&self.meta_key())?;
         let _first_bucket = HashBucket::new(
-            BufKey::new(index.file_id, 1, BufType::Data),
-            index.overflow_file_id,
-            db_state)?;
+            BufKey::new(self.file_id, 1, BufType::Data),
+            self.overflow_file_id,
+            buf_mgr)?;
         let _second_bucket = HashBucket::new(
-            BufKey::new(index.file_id, 2, BufType::Data),
-            index.overflow_file_id,
-            db_state)?;
-        let _overflow = db_state.buf_mgr.new_buf(
-            &BufKey::new(index.overflow_file_id, 0, BufType::Data))?;
+            BufKey::new(self.file_id, 2, BufType::Data),
+            self.overflow_file_id,
+            buf_mgr)?;
+        let _overflow = buf_mgr.new_buf(
+            &BufKey::new(self.overflow_file_id, 0, BufType::Data))?;
 
         let mut meta_guard = meta_page.write().unwrap();
         meta_guard.write_tuple_data(
-            &bincode::serialize(&index.rel_id)?,
+            &bincode::serialize(&self.rel_id)?,
             None,
             None,
         )?;
         meta_guard.write_tuple_data(
-            &bincode::serialize(&index.key_desc)?,
+            &bincode::serialize(&self.key_desc)?,
             None,
             None,
         )?;
         meta_guard.write_tuple_data(
-            &bincode::serialize(&index.meta_key().inc_offset())?,
+            &bincode::serialize(&self.meta_key().inc_offset())?,
             None,
             None,
         )?;
         meta_guard.write_tuple_data(
             &bincode::serialize(&1u32)?, None, None)?;
         meta_guard.write_tuple_data(
-            &bincode::serialize(&index.overflow_file_id)?, None, None)?;
-
-        Ok(index)
+            &bincode::serialize(&self.overflow_file_id)?, None, None)?;
+        Ok(())
     }
 
     pub fn load(file_id: ID, db_state: &mut DbState) -> Result<HashIndex> {
@@ -193,7 +212,7 @@ impl HashIndex {
                 next.offset + (num_buckets as u64),
                 BufType::Data),
             self.overflow_file_id,
-            db_state,
+            &mut db_state.buf_mgr,
         )?;
         next_bucket.split(&new_bucket, (num_buckets * 2) as u128, db_state)?;
 
@@ -267,9 +286,9 @@ impl HashBucket {
     fn new(
         buf_key: BufKey,
         overflow_file_id: ID,
-        db_state: &mut DbState,
+        buf_mgr: &mut BufMgr,
     ) -> Result<Self> {
-        let page = db_state.buf_mgr.new_buf(&buf_key)?;
+        let page = buf_mgr.new_buf(&buf_key)?;
         let mut guard = page.write().unwrap();
         assert_eq!(guard.tuple_count(), 0);
         guard.write_tuple_data(
@@ -359,7 +378,7 @@ impl HashBucket {
             HashBucket::new(
                 overflow_key.clone(),
                 self.overflow_file_id,
-                db_state,
+                &mut db_state.buf_mgr,
             )?;
             page.write_tuple_data(
                 &bincode::serialize(&overflow_key)?,
