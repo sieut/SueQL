@@ -1,7 +1,8 @@
-use db_state::DbSettings;
+use crate::error::Result;
+use crate::db_state::DbSettings;
+use crate::storage::buf_page::HEADER_SIZE;
+use crate::storage::{BufKey, BufPage, BufType, PAGE_SIZE};
 use std::io::Write;
-use storage::buf_page::HEADER_SIZE;
-use storage::{BufKey, BufPage, BufType, PAGE_SIZE};
 use super::BufMgr;
 
 #[test]
@@ -129,6 +130,42 @@ fn test_allocate_mem_bufs() {
     let pages = buf_mgr.allocate_mem_bufs(Some(200)).unwrap();
     assert_eq!(pages.len(), 200);
     teardown_bufmgr(data_dir);
+}
+
+#[test]
+fn test_sequential_scan() -> Result<()> {
+    let data_dir = "test_sequential_scan";
+
+    let mut buf_mgr = setup_bufmgr(data_dir, Some(5));
+    buf_mgr.new_buf(&BufKey::new(1, 0, BufType::Data))?;
+    buf_mgr.new_buf(&BufKey::new(1, 1, BufType::Data))?;
+    buf_mgr.new_buf(&BufKey::new(1, 2, BufType::Data))?;
+    buf_mgr.new_buf(&BufKey::new(1, 3, BufType::Data))?;
+    buf_mgr.new_buf(&BufKey::new(1, 4, BufType::Data))?;
+    // Reset buf_mgr to evict all caches
+    let mut buf_mgr = BufMgr::new(DbSettings {
+        data_dir: Some(data_dir.to_string()),
+        buf_mgr_size: Some(5),
+    });
+    buf_mgr.get_buf(&BufKey::new(0, 0, BufType::Data))?;
+    let start = BufKey::new(1, 0, BufType::Data);
+    let end = BufKey::new(1, 4, BufType::Data);
+    let mut count = 0;
+    buf_mgr.sequential_scan(
+        start,
+        end,
+        move |page, bm| {
+            let guard = page.read().unwrap();
+            assert_eq!(guard.buf_key.offset, count);
+            count += 1;
+            if count == 5 {
+                assert!(!bm.has_buf(&BufKey::new(0, 0, BufType::Data)));
+            }
+            Ok(())
+        })?;
+
+    teardown_bufmgr(data_dir);
+    Ok(())
 }
 
 fn setup_bufmgr(data_dir: &str, buf_mgr_size: Option<usize>) -> BufMgr {

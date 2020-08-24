@@ -289,6 +289,63 @@ impl BufMgr {
             .collect()
     }
 
+    pub fn sequential_scan<F>(
+        &mut self,
+        start: BufKey,
+        end: BufKey,
+        mut func: F,
+    ) -> Result<()>
+    where F: FnMut(PageLock, &mut BufMgr) -> Result<()>
+    {
+        use std::thread;
+        use std::sync::mpsc;
+        assert_eq!(start.file_id, end.file_id);
+        assert!(start.offset <= end.offset);
+        if let BufType::Mem = start.buf_type {
+            todo!("Sequential scan is not supported for mem bufs");
+        }
+
+        let (sender, receiver) = mpsc::channel::<PageLock>();
+        let mut buf_mgr = self.clone();
+        thread::spawn(move || buf_mgr.sequential_get_buf(start, end, sender));
+        for buf in receiver {
+            func(buf, self)?;
+        }
+        Ok(())
+    }
+
+    fn sequential_get_buf(
+        &mut self,
+        start: BufKey,
+        end: BufKey,
+        sender: std::sync::mpsc::Sender<PageLock>,
+    ) -> Result<()> {
+        let mut buf = [0u8; storage::PAGE_SIZE];
+        let mut file = fs::File::open(start.to_filename(self.data_dir()))?;
+        file.seek(io::SeekFrom::Start(start.byte_offset()))?;
+
+        let mut cur = start;
+        while cur.offset <= end.offset {
+            let page = match self.get_item(&cur) {
+                Some(page) => {
+                    file.seek(
+                        io::SeekFrom::Current(storage::PAGE_SIZE as i64))?;
+                    page
+                }
+                None => {
+                    file.read_exact(&mut buf)?;
+                    self.add_buf(buf.to_vec(), &cur)?
+                }
+            };
+            let info = self.get_info_arc(&cur).unwrap();
+            let mut info_guard = info.write().unwrap();
+            info_guard.ref_bit = true;
+            sender.send(page).unwrap();
+            cur = cur.inc_offset();
+        }
+        Ok(())
+    }
+
     fn num_available_bufs(&self) -> usize {
         *self.max_size - self.buf_table_r.len()
     }
@@ -297,7 +354,7 @@ impl BufMgr {
         let mut file = fs::File::open(key.to_filename(self.data_dir()))?;
         file.seek(io::SeekFrom::Start(key.byte_offset()))?;
 
-        let mut buf = [0 as u8; storage::PAGE_SIZE];
+        let mut buf = [0u8; storage::PAGE_SIZE];
         file.read_exact(&mut buf)?;
         Ok(buf.to_vec())
     }
