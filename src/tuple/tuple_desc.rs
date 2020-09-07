@@ -131,13 +131,13 @@ impl TupleDesc {
         Ok(result)
     }
 
-    pub fn cols(&self, bytes: &[u8]) -> Result<Vec<TupleData>> {
+    pub fn cols<'a>(&self, bytes: &'a[u8]) -> Result<Vec<&'a[u8]>> {
         let mut cols = vec![];
         let mut cur_bytes = 0;
         for attr in self.attr_types.iter() {
             let attr_len =
                 attr.data_size(Some(&bytes[cur_bytes..bytes.len()]))?;
-            cols.push(bytes[cur_bytes..cur_bytes + attr_len].to_vec());
+            cols.push(&bytes[cur_bytes..cur_bytes + attr_len]);
             cur_bytes += attr_len;
         }
 

@@ -36,7 +36,7 @@ impl ExecNode for Projection {
                         let cols: Vec<Vec<u8>> = self
                             .indices
                             .iter()
-                            .map(|i| cols[*i].clone())
+                            .map(|i| cols[*i].to_vec())
                             .collect();
                         let projected = cols.concat();
 

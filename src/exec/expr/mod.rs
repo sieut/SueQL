@@ -185,7 +185,7 @@ impl Expr {
             Some(idx) => {
                 let output_type = desc.attr_types()[idx].clone();
                 let function = Box::new(move |bytes: &[u8]| {
-                    Ok(desc.cols(bytes)?[idx].clone())
+                    Ok(desc.cols(bytes)?[idx].to_vec())
                 });
                 Ok(Expr {
                     function,

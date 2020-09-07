@@ -242,7 +242,6 @@ impl Rel {
         Filter: Fn(&[u8]) -> Result<bool>,
         Then: FnMut(&[u8], &mut DbState) -> Result<()>,
     {
-        // TODO update scan after BufMgr bulk load is added
         let meta = db_state.buf_mgr.get_buf(&self.meta_buf_key())?;
         let _meta_guard = meta.read().unwrap();
 
